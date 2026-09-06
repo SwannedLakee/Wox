@@ -380,6 +380,12 @@ func fallbackHotkeyString(event woxui.KeyEvent) string {
 	if !event.Down || event.Repeat || event.Key == woxui.KeyUnknown || (event.Modifiers == 0 && !isFunctionKeyEvent(event.Key)) {
 		return ""
 	}
+	// Modifier presses belong to the raw dictation/double-modifier recorder.
+	// They carry their own modifier flag and would otherwise become cmd+meta.
+	switch event.Key {
+	case woxui.KeyAlt, woxui.KeyMeta, woxui.Key("shift"), woxui.Key("ctrl"), woxui.Key("control"):
+		return ""
+	}
 	parts := make([]string, 0, 5)
 	if event.Modifiers&woxui.KeyModifierControl != 0 {
 		parts = append(parts, "ctrl")

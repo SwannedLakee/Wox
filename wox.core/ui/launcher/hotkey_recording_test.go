@@ -106,3 +106,17 @@ func TestHotkeyLocalFallbackWithRawAvailable(t *testing.T) {
 		t.Fatal("raw availability disabled local fallback")
 	}
 }
+
+// TestFallbackHotkeyStringIgnoresPureModifiers keeps dictation modifier input
+// out of the normal-combo path while preserving the following ordinary key.
+func TestFallbackHotkeyStringIgnoresPureModifiers(t *testing.T) {
+	modifiers := woxui.KeyModifierControl | woxui.KeyModifierShift | woxui.KeyModifierAlt | woxui.KeyModifierMeta
+	for _, key := range []woxui.Key{woxui.KeyAlt, woxui.KeyMeta, "shift", "ctrl", "control"} {
+		if got := fallbackHotkeyString(woxui.KeyEvent{Key: key, Down: true, Modifiers: modifiers}); got != "" {
+			t.Fatalf("modifier %s produced candidate %q", key, got)
+		}
+	}
+	if got := fallbackHotkeyString(woxui.KeyEvent{Key: woxui.Key("c"), Down: true, Modifiers: woxui.KeyModifierControl | woxui.KeyModifierShift}); got != "ctrl+shift+c" {
+		t.Fatalf("normal combination changed: %q", got)
+	}
+}

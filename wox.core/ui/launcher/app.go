@@ -39,6 +39,7 @@ const (
 // App owns one launcher window and its typed core service boundary.
 type App struct {
 	queryHintEditorState queryHintEditor
+	queryTabFeedback     uint64
 	// These narrow locks protect the few resources intentionally accessed outside the UI thread.
 	translationsMu         sync.RWMutex
 	terminalSubscriptionMu sync.Mutex
@@ -1411,7 +1412,9 @@ func (a *App) onKey(event woxui.KeyEvent) bool {
 			return true
 		}
 		if event.Modifiers == 0 {
-			a.acceptQueryCompletionHint()
+			if !a.acceptQueryCompletionHint() {
+				a.rejectQueryTab()
+			}
 			return true
 		}
 	}

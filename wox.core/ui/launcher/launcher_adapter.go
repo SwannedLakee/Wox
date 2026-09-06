@@ -52,6 +52,7 @@ var resultColors = []woxui.Color{
 }
 
 type viewSnapshot struct {
+	queryTabFeedback      uint64
 	hint                  *common.QueryHint
 	queryHintCandidate    bool
 	editing               woxui.TextEditingState
@@ -147,6 +148,7 @@ func (a *App) snapshot() viewSnapshot {
 		selectedPreviewType = preview.PreviewType
 	}
 	return viewSnapshot{
+		queryTabFeedback:      a.queryTabFeedback,
 		hint:                  a.query.QueryHint.Clone(),
 		editing:               a.editor.State(),
 		results:               a.results,
@@ -562,7 +564,8 @@ func (a *App) queryViewProps(snapshot viewSnapshot, width, height, lineHeight fl
 		_ = a.window.Invalidate()
 	}
 	return launcherview.LauncherQueryProps{
-		Width: width, Height: height, LineHeight: lineHeight, Style: style, State: state, Lines: lines,
+		TabFeedback: snapshot.queryTabFeedback,
+		Width:       width, Height: height, LineHeight: lineHeight, Style: style, State: state, Lines: lines,
 		CompletionSuffix: completionSuffix, CaretWidth: caretWidth, CaretLine: caretLine,
 		CompositionWidth: compositionWidth, CompositionX: compositionX, CompositionLine: compositionLine, TextWidth: textWidth, CaretHeight: caretHeight,
 		Focused: queryFocused, Enabled: snapshot.queryEnabled, Theme: snapshot.palette.componentTheme(), OnTapAt: func(point woxui.Point) { a.placeQueryCaret(point, style, lineHeight) },

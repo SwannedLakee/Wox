@@ -43,6 +43,9 @@ func (a *App) queryHintView(snapshot viewSnapshot, width, height, lineHeight flo
 				}
 				continue
 			}
+			if element.Kind != common.QueryElementBlock {
+				continue
+			}
 			lineStart := 0
 			for lineIndex, line := range props.Lines {
 				lineEnd := lineStart + len([]rune(line.Text))

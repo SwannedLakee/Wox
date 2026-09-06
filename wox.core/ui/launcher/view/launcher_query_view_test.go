@@ -298,7 +298,28 @@ func TestGlanceBoundaryEqualCoversAllFields(t *testing.T) {
 }
 
 func launcherQueryCaretPainter(props LauncherQueryProps) woxwidget.CaretPainter {
-	return launcherQueryEditable(LauncherQueryView(props)).Child.(woxwidget.Gesture).Child.(woxwidget.CaretPainter)
+	animation := launcherQueryEditable(LauncherQueryView(props)).Child.(woxwidget.Gesture).Child.(woxwidget.AnimatedFloat)
+	return animation.Builder(animation.Target).(woxwidget.CaretPainter)
+}
+
+// Feedback must move only the painted caret and settle without moving the IME anchor.
+func TestQueryTabFeedbackKeepsEditorGeometry(t *testing.T) {
+	var anchor woxui.TextInputState
+	props := LauncherQueryProps{Width: 200, Height: 34, LineHeight: 34, CaretHeight: 30,
+		CaretWidth: 40, Focused: true, TabFeedback: 1,
+		OnTextInputState: func(state woxui.TextInputState) { anchor = state }}
+	bounds := woxui.Rect{X: -100, Width: 200, Height: 34}
+	animation := launcherQueryFeedback(props).(woxwidget.AnimatedFloat)
+	var moving, resting, expected woxui.DisplayList
+	animation.Builder(0.125).(woxwidget.CaretPainter).Paint(&moving, bounds, true, false)
+	if anchor.CursorRect.X != -60 {
+		t.Fatal("feedback moved IME anchor")
+	}
+	animation.Builder(1).(woxwidget.CaretPainter).Paint(&resting, bounds, true, false)
+	launcherQueryPainter(props).(woxwidget.CaretPainter).Paint(&expected, bounds, true, false)
+	if reflect.DeepEqual(moving, resting) || !reflect.DeepEqual(resting, expected) {
+		t.Fatal("feedback must reveal the shaking caret then restore normal blink rendering")
+	}
 }
 
 func launcherQueryEditable(widget woxwidget.Widget) woxwidget.EditableText {
@@ -322,7 +343,8 @@ func TestQueryTextBaselineSurvivesQueryHintFocusTransition(t *testing.T) {
 			Style: woxui.TextStyle{Size: 28 * scale}, State: woxui.TextEditingState{Text: "set volume "},
 			Lines: []LauncherQueryLine{{Text: "set volume "}}, Theme: woxcomponent.Theme{QueryText: woxui.Color{A: 255}}}
 		editable := launcherQueryEditor(props).(woxwidget.EditableText)
-		before := editable.Child.(woxwidget.Gesture).Child.(woxwidget.CaretPainter)
+		animation := editable.Child.(woxwidget.Gesture).Child.(woxwidget.AnimatedFloat)
+		before := animation.Builder(animation.Target).(woxwidget.CaretPainter)
 		after := LauncherQueryLabel(props).(woxwidget.CaretPainter)
 		bounds := woxui.Rect{X: -120 * scale, Y: 18 * scale, Width: props.Width, Height: props.Height}
 		var editing, label, expected woxui.DisplayList
@@ -344,13 +366,31 @@ func TestInlineQueryMarkPreservesTextGeometry(t *testing.T) {
 		bounds := woxui.Rect{X: -120 * scale, Y: 18 * scale, Width: props.Width, Height: props.Height}
 		var expected, actual woxui.DisplayList
 		color := props.Theme.QueryText
-		color.A = 26
-		expected.FillRoundedRect(woxui.Rect{X: bounds.X + 160*scale, Y: bounds.Y + 2*scale, Width: 32 * scale, Height: props.CaretHeight}, 4, color)
+		color.A = 18
+		expected.FillRoundedRect(woxui.Rect{X: bounds.X + 160*scale - 3, Y: bounds.Y + 2*scale, Width: 32*scale + 6, Height: props.CaretHeight}, 4, color)
 		launcherQueryPainter(props).(woxwidget.CaretPainter).Paint(&expected, bounds, true, false)
 		props.Marks = []LauncherQueryMark{{X: 160 * scale, Width: 32 * scale, Active: true}}
 		launcherQueryPainter(props).(woxwidget.CaretPainter).Paint(&actual, bounds, true, false)
 		if !reflect.DeepEqual(actual, expected) {
 			t.Fatalf("decoration changed editor geometry at scale %v", scale)
 		}
+	}
+}
+
+// Tight parameter gaps and editor edges must not produce overlapping decoration.
+func TestInlineQueryMarkPaddingStopsAtNeighborsAndEdges(t *testing.T) {
+	props := LauncherQueryProps{Width: 40, Height: 30, LineHeight: 30, CaretHeight: 26,
+		Theme: woxcomponent.Theme{QueryText: woxui.Color{R: 255, G: 255, B: 255, A: 255}}}
+	bounds := woxui.Rect{X: -100, Y: 20, Width: 40, Height: 30}
+	var expected, actual woxui.DisplayList
+	color := props.Theme.QueryText
+	color.A = 10
+	expected.FillRoundedRect(woxui.Rect{X: -100, Y: 20, Width: 21, Height: 26}, 4, color)
+	expected.FillRoundedRect(woxui.Rect{X: -79, Y: 20, Width: 19, Height: 26}, 4, color)
+	launcherQueryPainter(props).(woxwidget.CaretPainter).Paint(&expected, bounds, true, false)
+	props.Marks = []LauncherQueryMark{{X: 0, Width: 20}, {X: 22, Width: 18}}
+	launcherQueryPainter(props).(woxwidget.CaretPainter).Paint(&actual, bounds, true, false)
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatal("parameter decoration exceeded editor edges or overlapped its neighbor")
 	}
 }

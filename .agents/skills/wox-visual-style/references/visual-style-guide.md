@@ -66,7 +66,8 @@ Preserve the current special contracts unless a task explicitly targets them:
 | Surface | Contract |
 | --- | --- |
 | Launcher query | 50 compact, 55 normal, 61 comfortable; add measured line height for each extra line |
-| Launcher structured argument | One continuous query editor; same font and baseline as command text, no border or layout padding; subtle semantic text-color background over the value, ghost hint for empty arguments |
+| Launcher structured argument | One continuous query editor; same font and baseline as command text, no border, layout padding, or argument background; ghost hint for empty arguments |
+| Launcher structured block | Semantic text-color background with alpha 10/255 (18/255 when active), extending 3 logical units horizontally without moving text, clipped to the editor and shared gaps between adjacent blocks |
 | Action Panel header | 18 optically centered line; do not use a 16 Text slot |
 | Action Panel filter | 40 input inside a 46-high slot |
 | Action Panel row | 40 |
@@ -84,6 +85,9 @@ hints without separate input borders, font changes, baseline shifts or focus tra
 Never constrain a user's edit merely to retain a structure annotation. Explicit
 atomic blocks do not make ordinary arguments atomic or justify separate editors.
 This principle applies to future element kinds and plugin integrations as well.
+When forward Tab has neither a completion nor another semantic value, give the
+painted caret a 220 ms damped horizontal shake of at most 3 logical units. Keep
+text, selection, and the IME anchor fixed; suppress the feedback during composition.
 See [the structured query design](../../../../wox.core/ui/launcher/QUERY_HINT.md#design-principle-continuous-input-comes-first).
 
 ## Control size system

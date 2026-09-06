@@ -1,7 +1,9 @@
 package view
 
 import (
+	"math"
 	"strconv"
+	"time"
 
 	woxcomponent "wox/ui/launcher/component"
 	woxui "wox/ui/runtime"
@@ -25,6 +27,9 @@ type LauncherQueryMark struct {
 }
 
 type LauncherQueryProps struct {
+	TabFeedback      uint64
+	CaretShake       float32
+	CaretShaking     bool
 	Marks            []LauncherQueryMark
 	Label            string
 	Width            float32
@@ -68,6 +73,9 @@ type LauncherQueryProps struct {
 
 // Equal compares every prepared rendering dependency for the launcher query editor.
 func (p LauncherQueryProps) Equal(other LauncherQueryProps) bool {
+	if p.TabFeedback != other.TabFeedback || p.CaretShake != other.CaretShake || p.CaretShaking != other.CaretShaking {
+		return false
+	}
 	if p.Label != other.Label || p.Width != other.Width || p.Height != other.Height || p.LineHeight != other.LineHeight || p.Style != other.Style || p.State != other.State || p.CompletionSuffix != other.CompletionSuffix || p.CaretWidth != other.CaretWidth || p.CaretLine != other.CaretLine || p.CompositionWidth != other.CompositionWidth || p.CompositionX != other.CompositionX || p.CompositionLine != other.CompositionLine || p.TextWidth != other.TextWidth || p.CaretHeight != other.CaretHeight || p.Focused != other.Focused || p.Enabled != other.Enabled || p.Theme != other.Theme || len(p.Lines) != len(other.Lines) || len(p.Marks) != len(other.Marks) {
 		return false
 	}
@@ -310,7 +318,7 @@ func launcherQueryEditor(props LauncherQueryProps) woxwidget.Widget {
 				props.OnSecondaryTapDown(position)
 			}
 		},
-		Child: launcherQueryPainter(props),
+		Child: launcherQueryFeedback(props),
 	}
 	label := props.Label
 	if label == "" {
@@ -359,19 +367,42 @@ func LauncherQueryLabel(props LauncherQueryProps) woxwidget.Widget {
 	return launcherQueryPainter(props)
 }
 
+// launcherQueryFeedback uses the retained animation clock; only the painted caret moves.
+func launcherQueryFeedback(props LauncherQueryProps) woxwidget.Widget {
+	return woxwidget.AnimatedFloat{Key: "query-tab-feedback", Target: float32(props.TabFeedback), Duration: 220 * time.Millisecond, Builder: func(value float32) woxwidget.Widget {
+		props := props
+		remaining := min(float32(1), max(float32(0), float32(props.TabFeedback)-value))
+		if props.Focused && props.State.Composition == "" {
+			props.CaretShaking = remaining > 0
+			props.CaretShake = 3 * remaining * float32(math.Sin(float64(remaining)*4*math.Pi))
+		}
+		return launcherQueryPainter(props)
+	}}
+}
+
 // launcherQueryPainter keeps text, selection and caret geometry identical across focus transitions.
 func launcherQueryPainter(props LauncherQueryProps) woxwidget.Widget {
 	const cursorWidth = float32(2)
 	lineHeight, lines, contentHeight := launcherQueryLineMetrics(props)
 	return woxwidget.CaretPainter{Width: props.Width, Height: contentHeight, Active: props.Focused, Paint: func(displayList *woxui.DisplayList, bounds woxui.Rect, focused, caretVisible bool) {
 		textTop := bounds.Y + max(float32(0), bounds.Height-float32(len(lines))*lineHeight)/2
-		for _, mark := range props.Marks {
+		for index, mark := range props.Marks {
 			color := props.Theme.QueryText
-			color.A = 16
+			color.A = 10
 			if mark.Active {
-				color.A = 26
+				color.A = 18
 			}
-			displayList.FillRoundedRect(woxui.Rect{X: bounds.X + mark.X, Y: textTop + float32(mark.Line)*lineHeight, Width: mark.Width, Height: props.CaretHeight}, 4, color)
+			// Expand only the paint in logical units; keep editor geometry intact and
+			// share tight gaps between neighboring marks instead of overlapping them.
+			left, right := max(float32(0), mark.X-3), min(bounds.Width, mark.X+mark.Width+3)
+			if index > 0 && props.Marks[index-1].Line == mark.Line {
+				previous := props.Marks[index-1]
+				left = max(left, (previous.X+previous.Width+mark.X)/2)
+			}
+			if index+1 < len(props.Marks) && props.Marks[index+1].Line == mark.Line {
+				right = min(right, (mark.X+mark.Width+props.Marks[index+1].X)/2)
+			}
+			displayList.FillRoundedRect(woxui.Rect{X: bounds.X + left, Y: textTop + float32(mark.Line)*lineHeight, Width: max(float32(0), right-left), Height: props.CaretHeight}, 4, color)
 		}
 		lastLine := lines[len(lines)-1]
 		if focused && props.State.Composition == "" && props.CompletionSuffix != "" {
@@ -396,8 +427,12 @@ func launcherQueryPainter(props LauncherQueryProps) woxwidget.Widget {
 		cursorX := bounds.X + props.CaretWidth
 		caretY := textTop + float32(props.CaretLine)*lineHeight
 		// Native text fields hide the blinking caret once a range is selected.
-		if caretVisible && props.State.Selection.Collapsed() {
-			displayList.FillRect(woxui.Rect{X: cursorX, Y: caretY, Width: cursorWidth, Height: props.CaretHeight}, props.Theme.Cursor)
+		if (caretVisible || props.CaretShaking) && props.State.Selection.Collapsed() {
+			paintX := cursorX
+			if props.CaretShaking {
+				paintX = max(bounds.X, min(bounds.X+bounds.Width-cursorWidth, cursorX+props.CaretShake))
+			}
+			displayList.FillRect(woxui.Rect{X: paintX, Y: caretY, Width: cursorWidth, Height: props.CaretHeight}, props.Theme.Cursor)
 		}
 		if props.OnTextInputState != nil {
 			props.OnTextInputState(woxui.TextInputState{Enabled: true, CursorRect: woxui.Rect{X: cursorX, Y: caretY, Width: cursorWidth, Height: props.CaretHeight}})

@@ -155,23 +155,39 @@ func (a *App) queryHintChanged() {
 }
 
 // focusQueryElement changes only local editing state; navigation never starts a query.
-func (a *App) focusQueryElement(index int) {
+func (a *App) focusQueryElement(index int) bool {
 	hint := a.query.QueryHint
 	if hint == nil || a.editor.State().Composition != "" {
-		return
+		return false
 	}
 	direction := 1
 	if index < a.queryHintEditorState.active {
 		direction = -1
 	}
-	next := (index + len(hint.Elements)) % len(hint.Elements)
-	for count := 0; count < len(hint.Elements) && hint.Elements[next].Kind == common.QueryElementText && strings.TrimSpace(hint.Elements[next].Text) == ""; count++ {
-		next = (next + direction + len(hint.Elements)) % len(hint.Elements)
+	// Tab traverses semantic values, never command text, and stops at either end.
+	next := index
+	for next >= 0 && next < len(hint.Elements) && hint.Elements[next].Kind == common.QueryElementText {
+		next += direction
+	}
+	if next < 0 || next >= len(hint.Elements) {
+		return false
 	}
 	a.queryHintEditorState.active = next
 	a.queryHintEditorState.allSelected = false
 	start, end := queryElementRange(hint, next)
 	a.editor.SetSelection(start, end)
+	if a.window != nil {
+		_ = a.window.Invalidate()
+	}
+	return true
+}
+
+// rejectQueryTab signals an unavailable action without changing the editor or IME anchor.
+func (a *App) rejectQueryTab() {
+	if a.editor.State().Composition != "" {
+		return
+	}
+	a.queryTabFeedback++
 	if a.window != nil {
 		_ = a.window.Invalidate()
 	}
@@ -230,7 +246,9 @@ func (a *App) onQueryHintKey(event woxui.KeyEvent) bool {
 		if event.Modifiers != 0 {
 			delta = -1
 		}
-		a.focusQueryElement(s.active + delta)
+		if !a.focusQueryElement(s.active+delta) && event.Modifiers == 0 {
+			a.rejectQueryTab()
+		}
 		return true
 	}
 	state := a.editor.State()

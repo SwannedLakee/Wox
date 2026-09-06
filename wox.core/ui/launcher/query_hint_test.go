@@ -4,8 +4,74 @@ import (
 	"context"
 	"testing"
 	"wox/common"
+	launcherview "wox/ui/launcher/view"
 	woxui "wox/ui/runtime"
+	woxwidget "wox/ui/widget"
 )
+
+// Arguments retain empty hints, while only atomic blocks receive decoration.
+func TestQueryHintBackgroundOnlyForBlocks(t *testing.T) {
+	for _, tc := range []struct {
+		kind, value, placeholder string
+		marks                    int
+	}{
+		{common.QueryElementArgument, "", "Volume (0–100)", 0},
+		{common.QueryElementArgument, "23", "", 0},
+		{common.QueryElementBlock, "23", "", 1},
+	} {
+		a := &App{}
+		hint := &common.QueryHint{Elements: []common.QueryElement{
+			{Kind: common.QueryElementText, Text: "set volume "},
+			{Kind: tc.kind, Value: tc.value, Placeholder: common.I18nString(tc.placeholder)},
+		}}
+		widget := a.queryHintView(viewSnapshot{hint: hint, editing: woxui.TextEditingState{Text: hint.PlainText()}}, 200, 40, 34)
+		scroll := widget.(woxwidget.Semantics).Child.(woxwidget.Gesture).Child.(woxwidget.Stack).Children[0].Child.(woxwidget.ScrollView)
+		props := scroll.Child.(woxwidget.Boundary[launcherview.LauncherQueryProps]).Props
+		if len(props.Marks) != tc.marks || props.CompletionSuffix != tc.placeholder {
+			t.Fatalf("kind %s value %q: marks=%d placeholder=%q", tc.kind, tc.value, len(props.Marks), props.CompletionSuffix)
+		}
+	}
+}
+
+// A placeholder is not completion text; exhausted navigation must preserve the edit.
+func TestQueryHintTabStopsAtEnds(t *testing.T) {
+	for _, value := range []string{"", "23"} {
+		a := &App{editor: woxui.NewTextEditor("")}
+		a.installQueryHint(&common.QueryHint{Elements: []common.QueryElement{
+			{Kind: common.QueryElementText, Text: "set volume "},
+			{Kind: common.QueryElementArgument, Value: value, Placeholder: "Volume (0–100)"},
+		}})
+		before := a.editor.State()
+		for _, mods := range []woxui.KeyModifiers{0, 0, woxui.KeyModifierShift} {
+			if !a.onQueryHintKey(woxui.KeyEvent{Key: woxui.KeyTab, Modifiers: mods, Down: true}) || a.editor.State() != before {
+				t.Fatalf("Tab changed single argument %q with modifiers %v", value, mods)
+			}
+		}
+		if a.queryTabFeedback != 2 {
+			t.Fatal("only unavailable forward Tab should trigger feedback")
+		}
+	}
+	a := &App{editor: woxui.NewTextEditor("")}
+	a.installQueryHint(&common.QueryHint{Elements: []common.QueryElement{
+		{Kind: common.QueryElementText, Text: "command "},
+		{Kind: common.QueryElementArgument, Value: "first"},
+		{Kind: common.QueryElementText, Text: " to "},
+		{Kind: common.QueryElementArgument, Value: "second"},
+	}})
+	a.onQueryHintKey(woxui.KeyEvent{Key: woxui.KeyTab, Down: true})
+	if a.editor.SelectedText() != "second" {
+		t.Fatal("Tab must skip nonempty command text between arguments")
+	}
+	before := a.editor.State()
+	a.onQueryHintKey(woxui.KeyEvent{Key: woxui.KeyTab, Down: true})
+	if a.editor.State() != before {
+		t.Fatal("Tab must not wrap from the last argument")
+	}
+	a.onQueryHintKey(woxui.KeyEvent{Key: woxui.KeyTab, Modifiers: woxui.KeyModifierShift, Down: true})
+	if a.editor.SelectedText() != "first" {
+		t.Fatal("Shift+Tab must navigate to the previous argument")
+	}
+}
 
 func TestSelectEntireQueryHintThenType(t *testing.T) {
 	a := &App{editor: woxui.NewTextEditor(""), lifecycleCtx: context.Background(), query: newInputQuery("set volume ")}

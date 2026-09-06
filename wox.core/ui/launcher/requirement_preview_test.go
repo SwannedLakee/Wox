@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"encoding/json"
 	"testing"
 
 	woxui "wox/ui/runtime"
@@ -36,4 +37,90 @@ func TestRequirementFormTabMovesOneHostFocusPerPress(t *testing.T) {
 	if app.requirementForm.focused != 1 {
 		t.Fatal("Tab key release moved requirement focus back to the first field")
 	}
+}
+
+func TestRequirementPreviewRendersSettingTooltipAsMarkdown(t *testing.T) {
+	data := queryRequirementPreviewData{
+		PluginID:   "spotify",
+		PluginName: "spotify",
+		Title:      "Spotify needs configuration",
+		Message:    "Spotify Client ID is required.",
+		SettingDefinitions: []formDefinition{{
+			Type: "textbox",
+			Value: formDefinitionValue{
+				Key:      "clientId",
+				Label:    "Spotify Client ID",
+				Tooltip:  "Create an app at [Spotify Dashboard](https://developer.spotify.com/dashboard).",
+				MaxLines: 1,
+			},
+		}},
+		Values: map[string]string{"clientId": ""},
+	}
+	previewBytes, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := queryResult{QueryID: "q1", ID: "r1"}
+	preview := queryPreview{PreviewData: string(previewBytes)}
+	_, key, err := requirementPreviewDataAndKey(result, preview)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	app := &App{
+		aiSettings: newAISettingsController(CommonDeps{Translate: func(s string) string { return s }}),
+		requirementForm: &requirementFormState{
+			formFieldsState: newFormFieldsState(data.SettingDefinitions, data.Values, false),
+			key:             key,
+			pluginID:        data.PluginID,
+			pluginName:      data.PluginName,
+			title:           data.Title,
+			message:         data.Message,
+		},
+	}
+	widget := app.buildRequirementPreview(result, preview, uiPalette{}, 420, 360)
+	root := widget.(woxwidget.Container)
+	column := root.Child.(woxwidget.Flex)
+	scroll := column.Children[2].(woxwidget.ScrollView)
+	field := scroll.Child.(woxwidget.Flex).Children[0].(woxwidget.Keyed).Child.(woxwidget.Container)
+	controlColumn := field.Child.(woxwidget.Flex).Children[1].(woxwidget.Expanded).Child.(woxwidget.Flex)
+	if _, ok := controlColumn.Children[1].(woxwidget.TextBlock); ok {
+		t.Fatal("requirement setting tooltip rendered as plain text instead of Markdown")
+	}
+	if !hasMarkdownLink(controlColumn.Children[1], "Spotify Dashboard") {
+		t.Fatal("requirement setting tooltip was not rendered as Markdown")
+	}
+}
+
+func hasMarkdownLink(widget woxwidget.Widget, label string) bool {
+	switch node := widget.(type) {
+	case woxwidget.Semantics:
+		if node.Role == woxui.AccessibilityRoleLink && node.Label == label {
+			return true
+		}
+		return hasMarkdownLink(node.Child, label)
+	case woxwidget.Keyed:
+		return hasMarkdownLink(node.Child, label)
+	case woxwidget.Container:
+		return hasMarkdownLink(node.Child, label)
+	case woxwidget.Expanded:
+		return hasMarkdownLink(node.Child, label)
+	case woxwidget.Align:
+		return hasMarkdownLink(node.Child, label)
+	case woxwidget.ScrollView:
+		return hasMarkdownLink(node.Child, label)
+	case woxwidget.Flex:
+		for _, child := range node.Children {
+			if hasMarkdownLink(child, label) {
+				return true
+			}
+		}
+	case woxwidget.Wrap:
+		for _, child := range node.Children {
+			if hasMarkdownLink(child, label) {
+				return true
+			}
+		}
+	}
+	return false
 }

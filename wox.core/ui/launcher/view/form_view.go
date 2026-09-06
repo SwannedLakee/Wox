@@ -172,7 +172,7 @@ func FormServiceField(props FormServiceFieldProps) woxwidget.Widget {
 		}}
 	}
 	return woxwidget.Semantics{Role: woxui.AccessibilityRoleGroup, Label: props.Title, Description: props.Description, Child: formFieldLayout(
-		props.ID, props.Title, props.Description, props.Width, props.Height, props.LabelWidth, control, woxcomponent.SettingsControlHeight, props.Theme, props.OnOpenLink,
+		props.ID, props.Title, props.Description, props.Width, props.Height, props.LabelWidth, control, woxcomponent.SettingsControlHeight, props.Theme, props.OnOpenLink, nil,
 	)}
 }
 
@@ -272,7 +272,7 @@ func FormModelField(props FormModelFieldProps) woxwidget.Widget {
 		ID: props.ID, Label: props.Label, Value: props.Value, Width: controlWidth, Height: woxcomponent.SettingsControlHeight, Outline: formFieldOutline(props.Focused, props.Theme),
 		Foreground: props.Theme.ActionText, Secondary: props.Theme.ActionHeader, Theme: props.Theme, OnTapBounds: props.OnTap,
 	})
-	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, control, woxcomponent.SettingsControlHeight, props.Theme, props.OnOpenLink)
+	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, control, woxcomponent.SettingsControlHeight, props.Theme, props.OnOpenLink, nil)
 }
 
 // FormAppFieldProps contains one application selector row.
@@ -414,7 +414,7 @@ func FormHotkeyField(props FormHotkeyFieldProps) woxwidget.Widget {
 			Child:   control, Theme: props.Theme,
 		})
 	}
-	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, control, woxcomponent.SettingsControlHeight, props.Theme, props.OnOpenLink)
+	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, control, woxcomponent.SettingsControlHeight, props.Theme, props.OnOpenLink, props.Window)
 }
 
 // FormSwitchFieldProps contains one Flutter-style plugin boolean row.
@@ -434,7 +434,7 @@ type FormSwitchFieldProps struct {
 // FormSwitchField builds a real switch instead of exposing the boolean as text.
 func FormSwitchField(props FormSwitchFieldProps) woxwidget.Widget {
 	control := woxcomponent.WoxSwitch(woxcomponent.SwitchProps{ID: props.ID, Label: props.Label, Value: props.Checked, OnChange: props.OnChange, Theme: props.Theme})
-	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, control, 22, props.Theme, props.OnOpenLink)
+	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, control, 22, props.Theme, props.OnOpenLink, nil)
 }
 
 // FormSelectFieldProps contains one outlined form dropdown.
@@ -460,7 +460,7 @@ func FormSelectField(props FormSelectFieldProps) woxwidget.Widget {
 		ID: props.ID, Label: props.Label, Value: props.Value, Width: controlWidth, Height: woxcomponent.SettingsControlHeight, Outline: formFieldOutline(props.Focused, props.Theme),
 		Foreground: props.Theme.ActionText, Secondary: props.Theme.ActionHeader, Theme: props.Theme, OnTap: props.OnTap, OnTapBounds: props.OnChoiceTap,
 	})
-	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, control, woxcomponent.SettingsControlHeight, props.Theme, props.OnOpenLink)
+	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, control, woxcomponent.SettingsControlHeight, props.Theme, props.OnOpenLink, nil)
 }
 
 // FormAIModelFieldProps contains Flutter's two-part provider/model selector state.
@@ -572,7 +572,7 @@ func (s *formAIModelFieldState) Build(context woxwidget.StateContext, widget any
 		Disabled: !props.ModelsAvailable || props.Model == "", OnTap: toggleEditing,
 	})
 	control := woxwidget.Flex{Axis: woxwidget.Horizontal, Gap: gap, Children: []woxwidget.Widget{provider, model, toggle}}
-	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, control, formAIModelControlHeight, props.Theme, props.OnOpenLink)
+	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, control, formAIModelControlHeight, props.Theme, props.OnOpenLink, props.Window)
 }
 
 func (s *formAIModelFieldState) Dispose() {}
@@ -653,7 +653,7 @@ func FormTextField(props FormTextFieldProps) woxwidget.Widget {
 			}),
 		}}
 	}
-	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, valueField, fieldHeight, props.Theme, props.OnOpenLink)
+	return formFieldLayout(props.ID, props.Label, props.Description, props.Width, props.Height, props.LabelWidth, valueField, fieldHeight, props.Theme, props.OnOpenLink, props.Window)
 }
 
 // formBrowseButtonWidth sizes the directory picker so the path field and button share one full control row.
@@ -680,7 +680,7 @@ func formSuffixWidth(window *woxui.Window, suffix string) float32 {
 	return max(float32(1), width)
 }
 
-func formFieldLayout(id, label, description string, width, height, labelWidth float32, control woxwidget.Widget, controlHeight float32, theme woxcomponent.Theme, onOpenLink func(string)) woxwidget.Widget {
+func formFieldLayout(id, label, description string, width, height, labelWidth float32, control woxwidget.Widget, controlHeight float32, theme woxcomponent.Theme, onOpenLink func(string), window *woxui.Window) woxwidget.Widget {
 	if labelWidth <= 0 {
 		labelWidth = 132
 	}
@@ -696,7 +696,7 @@ func formFieldLayout(id, label, description string, width, height, labelWidth fl
 			markdownTheme.PreviewText = theme.ResultSubtitle
 			descriptionWidget = woxcomponent.WoxMarkdown(woxcomponent.MarkdownProps{
 				ID: id + "-description", Document: woxcomponent.ParseMarkdown(description), Width: formFieldControlWidth(width, labelWidth),
-				FontSize: 11, BlockGap: 4, ExcludeLinkFocus: true, Theme: markdownTheme, OnOpenLink: onOpenLink,
+				FontSize: 11, BlockGap: 4, ExcludeLinkFocus: true, Theme: markdownTheme, Window: window, OnOpenLink: onOpenLink,
 			})
 		}
 		rightChildren = append(rightChildren, descriptionWidget)

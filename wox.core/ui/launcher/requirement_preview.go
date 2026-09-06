@@ -75,6 +75,7 @@ func (a *App) buildRequirementPreview(result queryResult, preview queryPreview, 
 	callbacks := formFieldCallbacks{
 		idPrefix: "requirement-form", focus: a.focusRequirementFormField, change: a.changeRequirementFormChoice,
 		setText: a.setRequirementFormText, onKey: a.onRequirementFormKey, openTable: a.openRequirementFormTable,
+		openLink: a.openRequirementFormLink,
 	}
 	rows := make([]woxwidget.Widget, 0, len(form.definitions))
 	for index, definition := range form.definitions {
@@ -85,7 +86,23 @@ func (a *App) buildRequirementPreview(result queryResult, preview queryPreview, 
 		Error: errorMessage, SaveLabel: a.translate("i18n:ui_save"), Saving: form.saving, Rows: rows,
 		KeepVisibleKey: formFieldsKeepVisibleKey("requirement-form", form.formFieldsSnapshot),
 		OnSubmit:       a.submitRequirementForm,
+		OnOpenLink:     a.openRequirementFormLink,
+		Window:         a.window,
 	})
+}
+
+// openRequirementFormLink opens Markdown links from query-requirement help text.
+func (a *App) openRequirementFormLink(target string) {
+	if a.window == nil {
+		return
+	}
+	if err := a.window.OpenExternalURL(target); err != nil {
+		ctx := a.lifecycleCtx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		util.GetLogger().Error(ctx, fmt.Sprintf("open query requirement link: %v", err))
+	}
 }
 
 // requirementPreviewDataAndKey validates the payload and derives its stable controller identity.

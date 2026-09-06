@@ -45,7 +45,7 @@ func TestMarkdownUsesSharedDocumentDecorations(t *testing.T) {
 	}
 	document := ParseMarkdown("- [x] done\n\n> quote\n\n---")
 
-	list := renderMarkdownBlock(document.blocks[0], MarkdownProps{Theme: theme}, 300, new(int)).(woxwidget.Flex)
+	list := renderMarkdownBlock(document.blocks[0], MarkdownProps{Theme: theme}, 300, new(int), new(int)).(woxwidget.Flex)
 	row := list.Children[0].(woxwidget.Flex)
 	marker := row.Children[0].(woxwidget.Container).Child.(woxwidget.Semantics)
 	if marker.Role != woxui.AccessibilityRoleCheckBox || !marker.Checked || !marker.Disabled {
@@ -58,19 +58,76 @@ func TestMarkdownUsesSharedDocumentDecorations(t *testing.T) {
 	if body.Children[0].(woxwidget.Text).Color != theme.ResultSubtitle {
 		t.Fatalf("completed task text color = %#v, want muted %#v", body.Children[0].(woxwidget.Text).Color, theme.ResultSubtitle)
 	}
-	bullet := renderMarkdownBlock(ParseMarkdown("- item").blocks[0], MarkdownProps{Theme: theme}, 300, new(int)).(woxwidget.Flex)
+	bullet := renderMarkdownBlock(ParseMarkdown("- item").blocks[0], MarkdownProps{Theme: theme}, 300, new(int), new(int)).(woxwidget.Flex)
 	bulletMarker := bullet.Children[0].(woxwidget.Flex).Children[0].(woxwidget.Container).Child.(woxwidget.Text)
 	if bulletMarker.Value != "•" || bulletMarker.Color != DocumentListMarkerColor {
 		t.Fatalf("list marker = %#v, want fixed #1379D2", bulletMarker)
 	}
 
-	quote := renderMarkdownBlock(document.blocks[1], MarkdownProps{Theme: theme}, 300, new(int)).(woxwidget.Container).Child.(woxwidget.Container)
+	quote := renderMarkdownBlock(document.blocks[1], MarkdownProps{Theme: theme}, 300, new(int), new(int)).(woxwidget.Container).Child.(woxwidget.Container)
 	if quote.LeftBorderColor != DocumentListMarkerColor || quote.LeftBorderWidth != documentQuoteBarWidth*documentDecorationScale(12) {
 		t.Fatalf("quote bar = %.1f/%#v, want shared #1379D2 accent bar", quote.LeftBorderWidth, quote.LeftBorderColor)
 	}
-	rule := renderMarkdownBlock(document.blocks[2], MarkdownProps{Theme: theme}, 300, new(int)).(woxwidget.Painter)
+	rule := renderMarkdownBlock(document.blocks[2], MarkdownProps{Theme: theme}, 300, new(int), new(int)).(woxwidget.Painter)
 	if rule.Width != 300 || rule.Height != documentRuleHeight {
 		t.Fatalf("rule = %.0fx%.0f, want shared full-width rule", rule.Width, rule.Height)
+	}
+}
+
+func TestParseMarkdownNestsUnderIndentedOrderedLists(t *testing.T) {
+	document := ParseMarkdown("Create an app:\n1. **App Name**: Wox\n2. **App description**: Wox spotify plugin\n3. **Website**: https://github.com/Wox-launcher/Wox\n4. **Redirect URIs**:\n  1. wox://plugin/aeb94d3d-9c39-4917-9cd0-a4cde95433a2?action=spotify-access-token\n  2. wox://plugin/aeb94d3d-9c39-4917-9cd0-a4cde95433a2?action=spotify-auth\n5. **Which API/SDKs are you planning to use**: Web API")
+	if len(document.blocks) != 2 || document.blocks[1].kind != markdownList {
+		t.Fatalf("blocks = %#v, want an intro paragraph and one list", document.blocks)
+	}
+	items := document.blocks[1].items
+	if len(items) != 5 {
+		t.Fatalf("top-level items = %d (%#v), want 5 so Redirect URIs stay nested", len(items), items)
+	}
+	if items[3].marker != "4." || items[4].marker != "5." {
+		t.Fatalf("markers = %q %q, want 4. then 5.", items[3].marker, items[4].marker)
+	}
+	nested := markdownNestedList(items[3].blocks)
+	if nested == nil || len(nested.items) != 2 {
+		t.Fatalf("redirect children = %#v, want two nested URI items", items[3].blocks)
+	}
+	if !strings.Contains(nested.items[0].label, "spotify-access-token") || !strings.Contains(nested.items[1].label, "spotify-auth") {
+		t.Fatalf("nested URIs = %#v", nested.items)
+	}
+	if nested.items[0].marker != "a." || nested.items[1].marker != "b." {
+		t.Fatalf("nested markers = %q %q, want a. then b.", nested.items[0].marker, nested.items[1].marker)
+	}
+}
+
+func TestMarkdownOrderedMarkersChangeByNestingDepth(t *testing.T) {
+	if markdownOrderedMarker(0, 4) != "4." || markdownOrderedMarker(1, 1) != "a." || markdownOrderedMarker(1, 27) != "aa." {
+		t.Fatalf("decimal/alpha markers = %q %q %q", markdownOrderedMarker(0, 4), markdownOrderedMarker(1, 1), markdownOrderedMarker(1, 27))
+	}
+	if markdownOrderedMarker(2, 2) != "ii." || markdownOrderedMarker(2, 4) != "iv." || markdownOrderedMarker(3, 1) != "A." {
+		t.Fatalf("roman/upper markers = %q %q %q", markdownOrderedMarker(2, 2), markdownOrderedMarker(2, 4), markdownOrderedMarker(3, 1))
+	}
+	document := ParseMarkdown("1. one\n   1. two\n      1. three\n         1. four")
+	first := document.blocks[0].items[0]
+	second := markdownNestedList(first.blocks).items[0]
+	third := markdownNestedList(second.blocks).items[0]
+	fourth := markdownNestedList(third.blocks).items[0]
+	if first.marker != "1." || second.marker != "a." || third.marker != "i." || fourth.marker != "A." {
+		t.Fatalf("nested outline = %q %q %q %q", first.marker, second.marker, third.marker, fourth.marker)
+	}
+}
+
+func markdownNestedList(blocks []markdownBlock) *markdownBlock {
+	for index := range blocks {
+		if blocks[index].kind == markdownList {
+			return &blocks[index]
+		}
+	}
+	return nil
+}
+
+func TestNormalizeMarkdownListIndentSkipsFencedCode(t *testing.T) {
+	source := "```\n1. keep\n  1. also keep\n```"
+	if got := normalizeMarkdownListIndent(source); got != source {
+		t.Fatalf("fenced list indent = %q, want unchanged", got)
 	}
 }
 
@@ -99,7 +156,7 @@ func TestMarkdownImageUsesAvailableWidthWithoutHeightCap(t *testing.T) {
 	document := ParseMarkdown("![](https://example.com/shot.png)")
 	widget := renderMarkdownBlock(document.blocks[0], MarkdownProps{
 		ID: "preview", ResolveImage: func(string) (*woxui.Image, string) { return &woxui.Image{Width: 2560, Height: 1788}, "" },
-	}, 690, new(int))
+	}, 690, new(int), new(int))
 	align := widget.(woxwidget.Align)
 	image := align.Child.(woxwidget.Image)
 	if image.Width != 690 || image.Height <= 280 {
@@ -131,7 +188,7 @@ func TestMarkdownLinkOpensFromPointerAction(t *testing.T) {
 	opened := ""
 	widget := renderMarkdownBlock(document.blocks[0], MarkdownProps{
 		ID: "preview", Theme: Theme{Cursor: woxui.Color{R: 255, G: 255, B: 255, A: 255}}, OnOpenLink: func(target string) { opened = target },
-	}, 300, new(int))
+	}, 300, new(int), new(int))
 
 	wrap := widget.(woxwidget.Wrap)
 	semantics := wrap.Children[0].(woxwidget.Semantics)
@@ -159,7 +216,7 @@ func TestMarkdownLinkCanExcludeKeyboardFocus(t *testing.T) {
 	document := ParseMarkdown(`[Install](https://wox.one)`)
 	widget := renderMarkdownBlock(document.blocks[0], MarkdownProps{
 		ID: "form-help", ExcludeLinkFocus: true, Theme: Theme{Cursor: woxui.Color{A: 255}}, OnOpenLink: func(string) {},
-	}, 300, new(int))
+	}, 300, new(int), new(int))
 	wrap := widget.(woxwidget.Wrap)
 	semantics := wrap.Children[0].(woxwidget.Semantics)
 	if _, ok := semantics.Child.(woxwidget.Focusable); ok {
@@ -172,7 +229,7 @@ func TestMarkdownLinkCanExcludeKeyboardFocus(t *testing.T) {
 
 func TestMarkdownTableUsesCollapsedGridLines(t *testing.T) {
 	theme := Theme{PreviewSplit: woxui.Color{R: 90, G: 90, B: 90, A: 255}, PreviewText: woxui.Color{A: 255}}
-	widget := renderMarkdownBlock(ParseMarkdown("| A | B |\n| - | - |\n| 1 | 2 |").blocks[0], MarkdownProps{Theme: theme}, 300, new(int)).(woxwidget.Stack)
+	widget := renderMarkdownBlock(ParseMarkdown("| A | B |\n| - | - |\n| 1 | 2 |").blocks[0], MarkdownProps{Theme: theme}, 300, new(int), new(int)).(woxwidget.Stack)
 	if len(widget.Children) != 2 {
 		t.Fatalf("markdown table children = %d, want content plus one outer stroke", len(widget.Children))
 	}
@@ -188,5 +245,55 @@ func TestMarkdownTableUsesCollapsedGridLines(t *testing.T) {
 	last := rows.Children[1].(woxwidget.Flex).Children[1].(woxwidget.Container)
 	if last.RightBorderWidth != 0 || last.BottomBorderWidth != 0 {
 		t.Fatalf("markdown last cell = %#v, want the outer frame to own that corner", last)
+	}
+}
+
+func TestMarkdownLinkUsesHandCursor(t *testing.T) {
+	_, _, links := markdownRunsContent(ParseMarkdown("[Dashboard](https://developer.spotify.com/dashboard)").blocks[0].runs, 12, Theme{})
+	if markdownCursorAt(links, 0) != woxui.PointerCursorHand {
+		t.Fatal("hovering a Markdown link should use the hand cursor")
+	}
+	if markdownCursorAt(links, len("Dashboard")) != woxui.PointerCursorText {
+		t.Fatal("text after a Markdown link should keep the text cursor")
+	}
+}
+
+func TestWoxMarkdownUsesSelectableTextWhenWindowIsSet(t *testing.T) {
+	widget := WoxMarkdown(MarkdownProps{
+		ID: "md", Document: ParseMarkdown("Copy **this** and [that](https://wox.one)."),
+		Width: 300, Window: &woxui.Window{}, Theme: Theme{PreviewText: woxui.Color{A: 255}},
+		OnOpenLink: func(string) {},
+	})
+	flex := widget.(woxwidget.Flex)
+	if _, ok := flex.Children[0].(woxwidget.Stateful); !ok {
+		t.Fatalf("child = %T, want a read-only text field for selection", flex.Children[0])
+	}
+}
+
+func TestWoxMarkdownSelectAllCopiesPlainText(t *testing.T) {
+	provider := &memoryClipboard{}
+	SetClipboardProvider(provider)
+	t.Cleanup(func() { SetClipboardProvider(nil) })
+
+	host := woxwidget.NewHost(func(woxui.FrameInfo) woxwidget.Widget {
+		return WoxMarkdown(MarkdownProps{
+			ID: "md", Document: ParseMarkdown("Copy **this** and [that](https://wox.one)."),
+			Width: 300, Window: &woxui.Window{}, Theme: Theme{PreviewText: woxui.Color{A: 255}},
+			OnOpenLink: func(string) {},
+		})
+	})
+	host.AttachServices(&hotkeyRecorderHostServices{})
+	displayList := &woxui.DisplayList{}
+	host.Frame(displayList, woxui.FrameInfo{Size: woxui.Size{Width: 300, Height: 80}, PixelSize: woxui.PixelSize{Width: 300, Height: 80}, Scale: 1})
+	host.RequestFocus("md-text-1")
+	primary := woxui.KeyModifierControl | woxui.KeyModifierMeta
+	if !host.Key(woxui.KeyEvent{Key: woxui.Key("a"), Modifiers: primary, Down: true}) {
+		t.Fatal("Ctrl/Cmd+A should select the markdown text")
+	}
+	if !host.Key(woxui.KeyEvent{Key: woxui.Key("c"), Modifiers: primary, Down: true}) {
+		t.Fatal("Ctrl/Cmd+C should copy the selected markdown text")
+	}
+	if provider.text != "Copy this and that." {
+		t.Fatalf("copied markdown = %q, want the rendered plain text", provider.text)
 	}
 }

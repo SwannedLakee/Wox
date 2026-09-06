@@ -23,6 +23,8 @@ var (
 	markdownParser          = goldmark.New(goldmark.WithExtensions(extension.GFM)).Parser()
 	markdownWikiImageSyntax = regexp.MustCompile(`!\[\[([^\]]+)\]\]`)
 	markdownImageLine       = regexp.MustCompile(`^!\[[^\]]*\]\([^)]+\)$`)
+	markdownListItemLine    = regexp.MustCompile(`^(\s*)([*+-]|[0-9]{1,9}[.)])(\s+|$)`)
+	markdownFenceLine       = regexp.MustCompile("^[ \t]{0,3}(`{3,}|~{3,})")
 )
 
 type markdownBlockKind uint8
@@ -93,19 +95,20 @@ type MarkdownProps struct {
 	// Flutter wraps form-table tooltips in ExcludeFocus for the same reason.
 	ExcludeLinkFocus bool
 	Theme            Theme
-	Window           *woxui.Window
-	ResolveImage     func(source string) (*woxui.Image, string)
-	OnOpenImage      func(source string)
-	OnOpenLink       func(target string)
+	// Window enables pointer hit-testing so rendered text can be selected and copied.
+	Window       *woxui.Window
+	ResolveImage func(source string) (*woxui.Image, string)
+	OnOpenImage  func(source string)
+	OnOpenLink   func(target string)
 	// InlineTrailing appends a control to the final top-level inline paragraph.
 	InlineTrailing woxwidget.Widget
 }
 
 // ParseMarkdown parses CommonMark with the GitHub-flavored extensions used by Wox previews.
 func ParseMarkdown(value string) MarkdownDocument {
-	source := []byte(normalizeMarkdownImages(value))
+	source := []byte(normalizeMarkdownListIndent(normalizeMarkdownImages(value)))
 	document := markdownParser.Parse(text.NewReader(source))
-	return MarkdownDocument{blocks: parseMarkdownBlocks(document, source)}
+	return MarkdownDocument{blocks: parseMarkdownBlocks(document, source, 0)}
 }
 
 // WoxMarkdown builds a native Markdown widget tree without a browser surface.
@@ -116,7 +119,8 @@ func WoxMarkdown(props MarkdownProps) woxwidget.Widget {
 	if blockGap <= 0 {
 		blockGap = 12
 	}
-	blocks := renderMarkdownBlocks(props.Document.blocks, props, width, &linkIndex)
+	textIndex := 0
+	blocks := renderMarkdownBlocks(props.Document.blocks, props, width, &linkIndex, &textIndex)
 	if props.InlineTrailing != nil && len(blocks) > 0 {
 		if paragraph, ok := blocks[len(blocks)-1].(woxwidget.Wrap); ok {
 			paragraph.Children = append(paragraph.Children, props.InlineTrailing)
@@ -157,8 +161,96 @@ func normalizeMarkdownImages(value string) string {
 	return strings.Join(normalized, "\n")
 }
 
+type markdownListIndentLevel struct {
+	indent      int
+	childIndent int
+}
+
+// normalizeMarkdownListIndent lifts 2-space nested ordered items into the parent item.
+// CommonMark treats "  1." after "4. " as a sibling because "4. " occupies 3 columns.
+func normalizeMarkdownListIndent(value string) string {
+	lines := strings.Split(value, "\n")
+	normalized := make([]string, 0, len(lines))
+	levels := make([]markdownListIndentLevel, 0, 4)
+	inFence := false
+	for _, line := range lines {
+		if markdownFenceLine.MatchString(line) {
+			inFence = !inFence
+			levels = levels[:0]
+			normalized = append(normalized, line)
+			continue
+		}
+		if inFence {
+			normalized = append(normalized, line)
+			continue
+		}
+		indent, childIndent, isList := markdownListItemColumns(line)
+		if !isList {
+			if strings.TrimSpace(line) == "" {
+				normalized = append(normalized, line)
+				continue
+			}
+			if markdownLeadingColumns(line) == 0 {
+				levels = levels[:0]
+			}
+			normalized = append(normalized, line)
+			continue
+		}
+		for len(levels) > 0 && indent < levels[len(levels)-1].indent {
+			levels = levels[:len(levels)-1]
+		}
+		if len(levels) > 0 {
+			parent := levels[len(levels)-1]
+			if indent > parent.indent && indent < parent.childIndent {
+				line = strings.Repeat(" ", parent.childIndent-indent) + line
+				indent = parent.childIndent
+			}
+		}
+		if len(levels) == 0 || indent == 0 {
+			levels = []markdownListIndentLevel{{indent: indent, childIndent: childIndent}}
+		} else if indent == levels[len(levels)-1].indent {
+			levels[len(levels)-1] = markdownListIndentLevel{indent: indent, childIndent: childIndent}
+		} else if indent >= levels[len(levels)-1].childIndent {
+			levels = append(levels, markdownListIndentLevel{indent: indent, childIndent: childIndent})
+		}
+		normalized = append(normalized, line)
+	}
+	return strings.Join(normalized, "\n")
+}
+
+func markdownListItemColumns(line string) (indent, childIndent int, ok bool) {
+	parts := markdownListItemLine.FindStringSubmatch(line)
+	if len(parts) != 4 {
+		return 0, 0, false
+	}
+	indent = markdownLeadingColumns(parts[1])
+	markerWidth := len(parts[2])
+	spaceAfter := len(parts[3])
+	if spaceAfter == 0 {
+		spaceAfter = 1
+	} else if spaceAfter > 4 {
+		spaceAfter = 4
+	}
+	return indent, indent + markerWidth + spaceAfter, true
+}
+
+func markdownLeadingColumns(value string) int {
+	columns := 0
+	for _, r := range value {
+		switch r {
+		case ' ':
+			columns++
+		case '\t':
+			columns += 4 - columns%4
+		default:
+			return columns
+		}
+	}
+	return columns
+}
+
 // parseMarkdownBlocks converts Goldmark nodes into a renderer-owned immutable block model.
-func parseMarkdownBlocks(parent ast.Node, source []byte) []markdownBlock {
+func parseMarkdownBlocks(parent ast.Node, source []byte, orderedDepth int) []markdownBlock {
 	blocks := make([]markdownBlock, 0)
 	for node := parent.FirstChild(); node != nil; node = node.NextSibling() {
 		switch value := node.(type) {
@@ -177,9 +269,9 @@ func parseMarkdownBlocks(parent ast.Node, source []byte) []markdownBlock {
 		case *ast.FencedCodeBlock:
 			blocks = append(blocks, markdownBlock{kind: markdownCode, language: string(value.Language(source)), runs: []markdownRun{{text: string(value.Text(source))}}})
 		case *ast.Blockquote:
-			blocks = append(blocks, markdownBlock{kind: markdownQuote, children: parseMarkdownBlocks(value, source)})
+			blocks = append(blocks, markdownBlock{kind: markdownQuote, children: parseMarkdownBlocks(value, source, orderedDepth)})
 		case *ast.List:
-			blocks = append(blocks, parseMarkdownList(value, source))
+			blocks = append(blocks, parseMarkdownList(value, source, orderedDepth))
 		case *ast.ThematicBreak:
 			blocks = append(blocks, markdownBlock{kind: markdownRule})
 		case *extast.Table:
@@ -191,7 +283,7 @@ func parseMarkdownBlocks(parent ast.Node, source []byte) []markdownBlock {
 			}
 		default:
 			if value.Type() == ast.TypeBlock {
-				blocks = append(blocks, parseMarkdownBlocks(value, source)...)
+				blocks = append(blocks, parseMarkdownBlocks(value, source, orderedDepth)...)
 			}
 		}
 	}
@@ -225,9 +317,16 @@ func paragraphMarkdownImage(paragraph *ast.Paragraph, source []byte) (markdownBl
 }
 
 // parseMarkdownList keeps nested block structure while assigning visible markers.
-func parseMarkdownList(list *ast.List, source []byte) markdownBlock {
+func parseMarkdownList(list *ast.List, source []byte, orderedDepth int) markdownBlock {
 	block := markdownBlock{kind: markdownList}
 	index := list.Start
+	if index <= 0 {
+		index = 1
+	}
+	childDepth := orderedDepth
+	if list.IsOrdered() {
+		childDepth++
+	}
 	for child := list.FirstChild(); child != nil; child = child.NextSibling() {
 		item, ok := child.(*ast.ListItem)
 		if !ok {
@@ -235,17 +334,66 @@ func parseMarkdownList(list *ast.List, source []byte) markdownBlock {
 		}
 		marker := "•"
 		if list.IsOrdered() {
-			marker = fmt.Sprintf("%d.", index)
+			marker = markdownOrderedMarker(orderedDepth, index)
 			index++
 		}
 		task, checked := markdownTaskState(item)
 		if task {
 			marker = ""
 		}
-		blocks := parseMarkdownBlocks(item, source)
+		blocks := parseMarkdownBlocks(item, source, childDepth)
 		block.items = append(block.items, markdownListItem{marker: marker, label: strings.TrimSpace(markdownPlainText(item, source)), task: task, checked: checked, blocks: blocks})
 	}
 	return block
+}
+
+// markdownOrderedMarker uses outline sequences so nested numbered lists stay visually distinct: 1. / a. / i. / A.
+func markdownOrderedMarker(depth, index int) string {
+	if index <= 0 {
+		index = 1
+	}
+	switch depth % 4 {
+	case 1:
+		return markdownAlphaMarker(index, false) + "."
+	case 2:
+		return markdownRomanMarker(index) + "."
+	case 3:
+		return markdownAlphaMarker(index, true) + "."
+	default:
+		return fmt.Sprintf("%d.", index)
+	}
+}
+
+// markdownAlphaMarker converts a 1-based index into a spreadsheet-style letter sequence.
+func markdownAlphaMarker(index int, upper bool) string {
+	letters := make([]byte, 0, 4)
+	for index > 0 {
+		index--
+		letter := byte('a' + index%26)
+		if upper {
+			letter = byte('A' + index%26)
+		}
+		letters = append(letters, letter)
+		index /= 26
+	}
+	for i, j := 0, len(letters)-1; i < j; i, j = i+1, j-1 {
+		letters[i], letters[j] = letters[j], letters[i]
+	}
+	return string(letters)
+}
+
+// markdownRomanMarker converts a 1-based index into lowercase Roman numerals.
+func markdownRomanMarker(index int) string {
+	values := []int{1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1}
+	symbols := []string{"m", "cm", "d", "cd", "c", "xc", "l", "xl", "x", "ix", "v", "iv", "i"}
+	var builder strings.Builder
+	for i, value := range values {
+		for index >= value {
+			builder.WriteString(symbols[i])
+			index -= value
+		}
+	}
+	return builder.String()
 }
 
 // markdownTaskState reads the GFM task node without leaking emoji markers into text runs.
@@ -389,35 +537,35 @@ func safeMarkdownLink(target string) string {
 }
 
 // renderMarkdownBlocks maps the parsed document to portable widgets.
-func renderMarkdownBlocks(blocks []markdownBlock, props MarkdownProps, width float32, linkIndex *int) []woxwidget.Widget {
+func renderMarkdownBlocks(blocks []markdownBlock, props MarkdownProps, width float32, linkIndex, textIndex *int) []woxwidget.Widget {
 	widgets := make([]woxwidget.Widget, 0, len(blocks))
 	for _, block := range blocks {
-		widgets = append(widgets, renderMarkdownBlock(block, props, width, linkIndex))
+		widgets = append(widgets, renderMarkdownBlock(block, props, width, linkIndex, textIndex))
 	}
 	return widgets
 }
 
 // renderMarkdownBlock picks the simplest native surface for one block.
-func renderMarkdownBlock(block markdownBlock, props MarkdownProps, width float32, linkIndex *int) woxwidget.Widget {
+func renderMarkdownBlock(block markdownBlock, props MarkdownProps, width float32, linkIndex, textIndex *int) woxwidget.Widget {
 	fontSize := markdownFontSize(props)
 	switch block.kind {
 	case markdownHeading:
-		return markdownRunsWidget(block.runs, props, width, fontSize, linkIndex)
+		return markdownRunsWidget(block.runs, props, width, fontSize, linkIndex, textIndex)
 	case markdownCode:
-		return markdownCodeWidget(block, props, width)
+		return markdownCodeWidget(block, props, width, textIndex)
 	case markdownQuote:
 		innerWidth := max(float32(0), width-documentQuoteWidth(fontSize))
-		return documentQuote(width, fontSize, DocumentListMarkerColor, woxwidget.Flex{Axis: woxwidget.Vertical, Gap: 8, Children: renderMarkdownBlocks(block.children, props, innerWidth, linkIndex)})
+		return documentQuote(width, fontSize, DocumentListMarkerColor, woxwidget.Flex{Axis: woxwidget.Vertical, Gap: 8, Children: renderMarkdownBlocks(block.children, props, innerWidth, linkIndex, textIndex)})
 	case markdownList:
-		return markdownListWidget(block, props, width, linkIndex)
+		return markdownListWidget(block, props, width, linkIndex, textIndex)
 	case markdownRule:
 		return documentHorizontalRule(width, props.Theme.PreviewSplit)
 	case markdownTable:
-		return markdownTableWidget(block.table, props, width)
+		return markdownTableWidget(block.table, props, width, textIndex)
 	case markdownImage:
 		return markdownImageWidget(block, props, width, linkIndex)
 	default:
-		return markdownRunsWidget(block.runs, props, width, fontSize, linkIndex)
+		return markdownRunsWidget(block.runs, props, width, fontSize, linkIndex, textIndex)
 	}
 }
 
@@ -429,7 +577,10 @@ func markdownFontSize(props MarkdownProps) float32 {
 }
 
 // markdownRunsWidget wraps inline text while retaining native link actions.
-func markdownRunsWidget(runs []markdownRun, props MarkdownProps, width, fontSize float32, linkIndex *int) woxwidget.Widget {
+func markdownRunsWidget(runs []markdownRun, props MarkdownProps, width, fontSize float32, linkIndex, textIndex *int) woxwidget.Widget {
+	if field := markdownSelectableRuns(runs, props, width, fontSize, textIndex); field != nil {
+		return field
+	}
 	children := make([]woxwidget.Widget, 0, len(runs)*2)
 	for _, run := range runs {
 		style := woxui.TextStyle{Size: fontSize}
@@ -490,6 +641,120 @@ func markdownRunsWidget(runs []markdownRun, props MarkdownProps, width, fontSize
 	return woxwidget.Wrap{Gap: 0, RunGap: max(float32(3), fontSize*0.25), Children: children}
 }
 
+type markdownLinkRange struct {
+	start  int
+	end    int
+	target string
+}
+
+// markdownSelectableRuns uses a read-only text field so users can drag-select and copy rendered text.
+func markdownSelectableRuns(runs []markdownRun, props MarkdownProps, width, fontSize float32, textIndex *int) woxwidget.Widget {
+	if props.Window == nil || props.InlineTrailing != nil || textIndex == nil {
+		return nil
+	}
+	value, rich, links := markdownRunsContent(runs, fontSize, props.Theme)
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	*textIndex++
+	return markdownSelectableText(fmt.Sprintf("%s-text-%d", markdownSelectableID(props.ID), *textIndex), value, rich, links, props, width, fontSize)
+}
+
+func markdownSelectableID(id string) string {
+	if strings.TrimSpace(id) == "" {
+		return "markdown"
+	}
+	return id
+}
+
+func markdownRunsContent(runs []markdownRun, fontSize float32, theme Theme) (string, []TextFieldRichRun, []markdownLinkRange) {
+	var builder strings.Builder
+	rich := make([]TextFieldRichRun, 0, len(runs))
+	links := make([]markdownLinkRange, 0)
+	offset := 0
+	for _, run := range runs {
+		if run.text == "" {
+			continue
+		}
+		start := offset
+		builder.WriteString(run.text)
+		offset += utf8.RuneCountInString(run.text)
+		style := woxui.TextStyle{Size: fontSize}
+		if run.style.bold {
+			style.Weight = woxui.FontWeightSemibold
+		}
+		color := theme.PreviewText
+		if run.style.strike {
+			color = withAlpha(color, 150)
+		}
+		underline := false
+		if run.style.link != "" {
+			color = DocumentListMarkerColor
+			underline = true
+			links = append(links, markdownLinkRange{start: start, end: offset, target: run.style.link})
+		}
+		if run.style.code {
+			style.Size = max(float32(10), fontSize-1)
+		}
+		background := woxui.Color{}
+		if run.style.code {
+			background = withAlpha(theme.PreviewText, 18)
+		}
+		rich = append(rich, TextFieldRichRun{
+			Start: start, End: offset, Style: style, Color: color, Underline: underline, Strike: run.style.strike, Background: background,
+		})
+	}
+	return builder.String(), rich, links
+}
+
+func markdownLinkAt(links []markdownLinkRange, offset int) string {
+	for _, link := range links {
+		if offset >= link.start && offset < link.end {
+			return link.target
+		}
+	}
+	return ""
+}
+
+func markdownSelectableText(id, value string, rich []TextFieldRichRun, links []markdownLinkRange, props MarkdownProps, width, fontSize float32) woxwidget.Widget {
+	lineHeight := markdownSelectableLineHeight(fontSize)
+	style := woxui.TextStyle{Size: fontSize}
+	lines := textFieldRichLines(value, props.Window, style, width, true, rich)
+	height := max(lineHeight, float32(max(1, len(lines)))*lineHeight+1)
+	var onTapOffset func(int) bool
+	var cursorAt func(int) woxui.PointerCursor
+	if len(links) > 0 {
+		cursorAt = func(offset int) woxui.PointerCursor { return markdownCursorAt(links, offset) }
+		if props.OnOpenLink != nil {
+			onTapOffset = func(offset int) bool {
+				target := markdownLinkAt(links, offset)
+				if target == "" {
+					return false
+				}
+				props.OnOpenLink(target)
+				return true
+			}
+		}
+	}
+	return WoxTextField(TextFieldProps{
+		ID: id, Width: width, Height: height, Padding: woxwidget.Insets{Bottom: 1},
+		Transparent: true, DisableHover: true, Style: style, RichRuns: rich, LineHeight: lineHeight,
+		TextColor: props.Theme.PreviewText, Value: value, ReadOnly: true, MaxLines: max(8, len(lines)+4),
+		Window: props.Window, Theme: props.Theme, OnTapOffset: onTapOffset, CursorAtOffset: cursorAt,
+	})
+}
+
+func markdownCursorAt(links []markdownLinkRange, offset int) woxui.PointerCursor {
+	if markdownLinkAt(links, offset) != "" {
+		return woxui.PointerCursorHand
+	}
+	return woxui.PointerCursorText
+}
+
+func markdownSelectableLineHeight(fontSize float32) float32 {
+	return max(float32(15), fontSize+3)
+}
+
 // markdownTokens exposes word and CJK boundaries to the existing Wrap widget.
 func markdownTokens(value string) []string {
 	tokens := make([]string, 0, utf8.RuneCountInString(value))
@@ -522,28 +787,42 @@ func isMarkdownWideRune(value rune) bool {
 }
 
 // markdownCodeWidget reuses the cross-platform text layout inside a code surface.
-func markdownCodeWidget(block markdownBlock, props MarkdownProps, width float32) woxwidget.Widget {
+func markdownCodeWidget(block markdownBlock, props MarkdownProps, width float32, textIndex *int) woxwidget.Widget {
 	innerWidth := max(float32(0), width-20)
 	code := strings.TrimSuffix(block.runs[0].text, "\n")
 	fontSize := markdownFontSize(props)
 	style := woxui.TextStyle{Size: max(float32(10), fontSize-1)}
-	layout := woxwidget.LayoutTextBlock(props.Window, code, style, innerWidth, 0, 17)
 	children := make([]woxwidget.Widget, 0, 2)
 	if block.language != "" {
 		children = append(children, woxwidget.Text{Value: block.language, Style: woxui.TextStyle{Size: max(float32(9), fontSize-2), Weight: woxui.FontWeightSemibold}, Color: withAlpha(props.Theme.PreviewText, 180)})
 	}
-	children = append(children, woxwidget.TextBlock{Value: code, Width: innerWidth, Height: layout.Size.Height, Layout: &layout, Style: style, LineHeight: 17, Color: props.Theme.PreviewText})
+	if props.Window != nil && textIndex != nil {
+		*textIndex++
+		rich := []TextFieldRichRun{{Start: 0, End: utf8.RuneCountInString(code), Style: style, Color: props.Theme.PreviewText}}
+		children = append(children, markdownSelectableText(fmt.Sprintf("%s-code-%d", markdownSelectableID(props.ID), *textIndex), code, rich, nil, props, innerWidth, style.Size))
+	} else {
+		layout := woxwidget.LayoutTextBlock(props.Window, code, style, innerWidth, 0, 17)
+		children = append(children, woxwidget.TextBlock{Value: code, Width: innerWidth, Height: layout.Size.Height, Layout: &layout, Style: style, LineHeight: 17, Color: props.Theme.PreviewText})
+	}
 	return woxwidget.Container{
 		Width: width, Padding: woxwidget.UniformInsets(10), Radius: 5, Color: withAlpha(props.Theme.PreviewText, 14), BorderColor: withAlpha(props.Theme.PreviewSplit, 90), BorderWidth: 1,
 		Child: woxwidget.Flex{Axis: woxwidget.Vertical, Gap: 7, Children: children},
 	}
 }
 
+// markdownListMarkerWidth keeps the marker column wide enough for roman or multi-letter labels.
+func markdownListMarkerWidth(marker string) float32 {
+	if marker == "" {
+		return float32(28)
+	}
+	return max(float32(28), float32(len([]rune(marker)))*8+8)
+}
+
 // markdownListWidget preserves nested blocks inside one row per list item.
-func markdownListWidget(block markdownBlock, props MarkdownProps, width float32, linkIndex *int) woxwidget.Widget {
+func markdownListWidget(block markdownBlock, props MarkdownProps, width float32, linkIndex, textIndex *int) woxwidget.Widget {
 	rows := make([]woxwidget.Widget, 0, len(block.items))
 	for _, item := range block.items {
-		markerWidth := float32(28)
+		markerWidth := markdownListMarkerWidth(item.marker)
 		marker := woxwidget.Widget(woxwidget.Text{Value: item.marker, Style: woxui.TextStyle{Size: markdownFontSize(props), Weight: woxui.FontWeightSemibold}, Color: DocumentListMarkerColor})
 		itemProps := props
 		if item.task {
@@ -556,14 +835,14 @@ func markdownListWidget(block markdownBlock, props MarkdownProps, width float32,
 		}
 		rows = append(rows, woxwidget.Flex{Axis: woxwidget.Horizontal, CrossAxisAlignment: woxwidget.CrossAxisStart, Children: []woxwidget.Widget{
 			woxwidget.Container{Width: markerWidth, Padding: woxwidget.Insets{Top: 1}, Child: marker},
-			woxwidget.Container{Width: max(float32(0), width-markerWidth), Child: woxwidget.Flex{Axis: woxwidget.Vertical, Gap: 7, Children: renderMarkdownBlocks(item.blocks, itemProps, max(float32(0), width-markerWidth), linkIndex)}},
+			woxwidget.Container{Width: max(float32(0), width-markerWidth), Child: woxwidget.Flex{Axis: woxwidget.Vertical, Gap: 7, Children: renderMarkdownBlocks(item.blocks, itemProps, max(float32(0), width-markerWidth), linkIndex, textIndex)}},
 		}})
 	}
 	return woxwidget.Flex{Axis: woxwidget.Vertical, Gap: 7, Children: rows}
 }
 
 // markdownTableWidget keeps wide GFM tables horizontally scrollable.
-func markdownTableWidget(table markdownTableData, props MarkdownProps, width float32) woxwidget.Widget {
+func markdownTableWidget(table markdownTableData, props MarkdownProps, width float32, textIndex *int) woxwidget.Widget {
 	if len(table.rows) == 0 {
 		return woxwidget.Container{Width: width}
 	}
@@ -587,13 +866,21 @@ func markdownTableWidget(table markdownTableData, props MarkdownProps, width flo
 				weight = woxui.FontWeightSemibold
 				background = withAlpha(props.Theme.PreviewText, 12)
 			}
+			cellWidthInner := max(float32(0), cellWidth-16)
+			var cellText woxwidget.Widget = woxwidget.TextBlock{
+				Value: value, Width: cellWidthInner, Height: 18, LineHeight: 18, MaxLines: 1, AlignmentY: 0.5, Style: woxui.TextStyle{Size: markdownFontSize(props), Weight: weight}, Color: props.Theme.PreviewText,
+			}
+			if props.Window != nil && textIndex != nil && strings.TrimSpace(value) != "" {
+				*textIndex++
+				style := woxui.TextStyle{Size: markdownFontSize(props), Weight: weight}
+				rich := []TextFieldRichRun{{Start: 0, End: utf8.RuneCountInString(value), Style: style, Color: props.Theme.PreviewText}}
+				cellText = markdownSelectableText(fmt.Sprintf("%s-cell-%d", markdownSelectableID(props.ID), *textIndex), value, rich, nil, props, cellWidthInner, style.Size)
+			}
 			cells = append(cells, WoxTableGridCell(TableGridCellProps{
 				Width: cellWidth, Height: 38, Color: background, Border: withAlpha(props.Theme.PreviewSplit, 100),
 				Trailing: column < columns-1, Bottom: rowIndex < len(table.rows)-1,
 				Padding: woxwidget.Insets{Left: 8, Right: 8},
-				Child: woxwidget.Align{Width: max(float32(0), cellWidth-16), Height: 38, Vertical: 0.5, Child: woxwidget.TextBlock{
-					Value: value, Width: max(float32(0), cellWidth-16), Height: 18, LineHeight: 18, MaxLines: 1, AlignmentY: 0.5, Style: woxui.TextStyle{Size: markdownFontSize(props), Weight: weight}, Color: props.Theme.PreviewText,
-				}},
+				Child:   woxwidget.Align{Width: cellWidthInner, Height: 38, Vertical: 0.5, Child: cellText},
 			}))
 		}
 		rows = append(rows, woxwidget.Flex{Axis: woxwidget.Horizontal, Children: cells})

@@ -146,7 +146,7 @@ Each `Result` can include:
 
 Useful patterns:
 
-- use `Preview` for markdown, text, image, URL, or file previews
+- use `Preview` for markdown, text, image, file, list, or embedded HTML/web page previews
 - use `Tails` for badges or small metadata
 - use `PreventHideAfterAction` when an action continues to update the same result in place
 
@@ -158,6 +158,38 @@ If you need to update a visible result after an action starts, use:
 If you need to stream or append additional results for the same active query, use:
 
 - `PushResults`
+
+## Static HTML preview
+
+Use `webview` for inline HTML, including CSS. No HTTP server or temporary HTML file is needed; `html` is a payload field, not a preview type.
+
+```typescript
+import type { WoxPreview, WoxPreviewWebviewData } from "@wox-launcher/wox-plugin"
+
+const preview: WoxPreview = {
+  PreviewType: "webview",
+  PreviewData: JSON.stringify({
+    html: '<!doctype html><html><body><h1 style="color:teal">Hello Wox</h1></body></html>'
+  } satisfies WoxPreviewWebviewData)
+}
+// Assign preview to Result.Preview.
+```
+
+Set either `html` or `url`. Optional JSON fields are `injectCss`, `userAgent`, `cacheDisabled`, and `cacheKey` (defaults to the URL or HTML). Inline HTML has no plugin-relative base URL: embed CSS/images or use absolute resource URLs. This is browser content, not sanitized Markdown; escape untrusted text before interpolating it into HTML.
+
+```python
+import json
+from wox_plugin import WoxPreview, WoxPreviewType
+
+preview = WoxPreview(
+    preview_type=WoxPreviewType.WEBVIEW,
+    preview_data=json.dumps({
+        "html": '<!doctype html><html><body><h1 style="color:teal">Hello Wox</h1></body></html>'
+    }),
+)
+# Assign preview to Result(preview=preview, ...).
+```
+
 
 ## Settings
 

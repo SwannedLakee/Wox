@@ -261,3 +261,21 @@ Plugins must declare metadata in a `plugin.json` file:
 
 - Wox Documentation: https://github.com/Wox-launcher/Wox
 - Plugin Examples: https://github.com/Wox-launcher/Wox.Plugin.Nodejs
+
+## Static HTML preview
+
+Use `webview` for inline HTML, including CSS. No HTTP server or temporary HTML file is needed; `html` is a payload field, not a preview type.
+
+```typescript
+import type { WoxPreview, WoxPreviewWebviewData } from "@wox-launcher/wox-plugin"
+
+const preview: WoxPreview = {
+  PreviewType: "webview",
+  PreviewData: JSON.stringify({
+    html: '<!doctype html><html><body><h1 style="color:teal">Hello Wox</h1></body></html>'
+  } satisfies WoxPreviewWebviewData)
+}
+// Assign preview to Result.Preview.
+```
+
+Set either `html` or `url`. Optional JSON fields are `injectCss`, `userAgent`, `cacheDisabled`, and `cacheKey` (defaults to the URL or HTML). Inline HTML has no plugin-relative base URL: embed CSS/images or use absolute resource URLs. This is browser content, not sanitized Markdown; escape untrusted text before interpolating it into HTML.

@@ -311,7 +311,7 @@ Script plugins can return a `preview` object per result. The preview is shown wh
 }
 ```
 
-Supported preview types: `markdown`, `text`, `image`, `url`, `file`, `remote`.
+Supported preview types include `markdown`, `text`, `image`, `url`, `file`, `remote`, `list`, and `webview`. For static HTML, set `preview.type` to `webview` and `preview.data` to a JSON-encoded string such as `JSON.stringify({ html: "<h1>Hello Wox</h1>" })`. See [HTML preview examples](./full-featured-plugin.md#static-html-preview).
 
 ## Tails
 

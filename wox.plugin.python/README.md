@@ -94,4 +94,23 @@ Plugins can declare settings that must be configured before Wox calls `query()`:
 
 ## License
 
-MIT 
+MIT
+
+## Static HTML preview
+
+Use `WoxPreviewType.WEBVIEW` with a JSON-encoded `html` field. No HTTP server or temporary HTML file is needed; there is no separate `html` preview type.
+
+```python
+import json
+from wox_plugin import WoxPreview, WoxPreviewType
+
+preview = WoxPreview(
+    preview_type=WoxPreviewType.WEBVIEW,
+    preview_data=json.dumps({
+        "html": '<!doctype html><html><body><h1 style="color:teal">Hello Wox</h1></body></html>'
+    }),
+)
+# Assign preview to Result(preview=preview, ...).
+```
+
+Set either `html` or `url`. Optional JSON fields are `injectCss`, `userAgent`, `cacheDisabled`, and `cacheKey` (defaults to the URL or HTML). Inline HTML has no plugin-relative base URL: embed CSS/images or use absolute resource URLs. This is browser content, not sanitized Markdown; use `html.escape` for untrusted text before interpolation.

@@ -1756,10 +1756,25 @@ export interface WoxImage {
  * - `text`: Plain text content
  * - `image`: Image preview
  * - `url`: Website URL preview
+ * - `webview`: Embedded web page or inline HTML (JSON payload)
  * - `file`: File preview
  * - `list`: Structured row-list preview
  */
-export type WoxPreviewType = "markdown" | "text" | "image" | "url" | "file" | "list"
+export type WoxPreviewType = "markdown" | "text" | "image" | "url" | "file" | "list" | "webview"
+
+/**
+ * Embedded browser content. Set either url or html, then JSON.stringify into PreviewData.
+ * Inline HTML has no plugin-relative base URL; use inline CSS and absolute resource URLs.
+ */
+export interface WoxPreviewWebviewData {
+  url?: string
+  html?: string
+  injectCss?: string
+  userAgent?: string
+  cacheDisabled?: boolean
+  /** Explicit content cache identity; defaults to the URL or HTML. */
+  cacheKey?: string
+}
 
 /**
  * One row in a `list` preview.
@@ -1879,6 +1894,7 @@ export interface WoxPreview {
    * - `text`: Plain text string
    * - `image`: Image URL, path, or base64 data
    * - `url`: Website URL to preview
+   * - `webview`: JSON string encoded from WoxPreviewWebviewData; use { html: "..." } for static HTML
    * - `file`: File path to preview
    * - `list`: JSON string encoded from WoxPreviewListData
    */

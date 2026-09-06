@@ -100,7 +100,9 @@ type WoxPreviewChatData struct {
 
 type WoxPreviewWebviewData struct {
 	Url           string `json:"url"`
+	Html          string `json:"html,omitempty"`
 	InjectCss     string `json:"injectCss,omitempty"`
 	UserAgent     string `json:"userAgent,omitempty"`
 	CacheDisabled bool   `json:"cacheDisabled,omitempty"`
+	CacheKey      string `json:"cacheKey,omitempty"`
 }

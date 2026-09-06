@@ -101,7 +101,7 @@ Methods for interacting with Wox:
 - `WoxPreviewTag`: Metadata tag shown below preview content
 - `WoxPreviewListData`: Structured data for list previews
 - `WoxPreviewListItem`: Row data for list previews
-- `WoxPreviewType`: MARKDOWN, TEXT, IMAGE, URL, FILE, LIST, REMOTE
+- `WoxPreviewType`: MARKDOWN, TEXT, IMAGE, URL, WEBVIEW, FILE, LIST, REMOTE
 - `WoxPreviewScrollPosition`: Control initial scroll position
 
 #### Setting Models (`models/setting.py`)

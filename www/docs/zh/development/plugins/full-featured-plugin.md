@@ -145,7 +145,7 @@ Wox 会把规范化后的 `Query` 传给 `query()`：
 
 常见用法：
 
-- 用 `Preview` 展示 markdown、文本、图片、URL 或文件预览
+- 用 `Preview` 展示 markdown、文本、图片、文件、列表或内嵌 HTML/网页预览
 - 用 `Tails` 展示徽标或补充元数据
 - 当一个 action 执行后还要继续原地更新结果时，给它加上 `PreventHideAfterAction`
 
@@ -157,6 +157,39 @@ Wox 会把规范化后的 `Query` 传给 `query()`：
 如果需要针对当前查询继续追加或流式推送结果，可使用：
 
 - `PushResults`
+
+## 静态 HTML 预览
+
+使用 `webview` 类型，把 HTML 放进 JSON 数据的 `html` 字段；无需启动 HTTP 服务或写临时文件。没有单独的 `html` preview 类型。
+
+```typescript
+import type { WoxPreview, WoxPreviewWebviewData } from "@wox-launcher/wox-plugin"
+
+const preview: WoxPreview = {
+  PreviewType: "webview",
+  PreviewData: JSON.stringify({
+    html: '<!doctype html><html><body><h1 style="color:teal">Hello Wox</h1></body></html>'
+  } satisfies WoxPreviewWebviewData)
+}
+// Assign preview to Result.Preview.
+```
+
+
+```python
+import json
+from wox_plugin import WoxPreview, WoxPreviewType
+
+preview = WoxPreview(
+    preview_type=WoxPreviewType.WEBVIEW,
+    preview_data=json.dumps({
+        "html": '<!doctype html><html><body><h1 style="color:teal">Hello Wox</h1></body></html>'
+    }),
+)
+# Assign preview to Result(preview=preview, ...).
+```
+
+
+`html` 和 `url` 选择一个填写。可选 JSON 字段包括 `injectCss`、`userAgent`、`cacheDisabled` 和 `cacheKey`（默认使用 URL 或 HTML）。内联 HTML 没有相对于插件目录的基础 URL，因此 CSS、图片等资源应内嵌或使用绝对 URL。这是浏览器内容，不会按 Markdown 进行净化；插入不可信文本时需要先做 HTML 转义（Python 可用 `html.escape`）。
 
 ## 设置
 

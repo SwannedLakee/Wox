@@ -284,7 +284,8 @@ Wox 通过 stdin 向您的脚本发送请求：
 
 - `query` 仅收到 `search`、`trigger_keyword`、`command`、`raw_query`，不会包含 selection 或查询环境数据。
 - 每次调用都会启动全新进程，超时 10 秒；如需复用请自行落盘缓存。
-- 预览、tails、MRU 恢复、结果动态更新等功能仅在全功能插件中提供。
+- 脚本结果可带 `preview` 对象。静态 HTML 使用 `type: "webview"`，`data` 填 JSON 字符串，例如 `JSON.stringify({ html: "<h1>Hello Wox</h1>" })`。参见 [HTML 预览示例](./full-featured-plugin.md#静态-html-预览)。
+- MRU 恢复、结果动态更新等能力请使用全功能插件。
 
 ## 环境变量
 

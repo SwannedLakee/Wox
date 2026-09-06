@@ -24,6 +24,7 @@ class WoxPreviewType(str, Enum):
     - TEXT: Plain text display
     - IMAGE: Display an image (using WoxImage)
     - URL: Load and display a web page
+    - WEBVIEW: Embedded web page or inline HTML (JSON payload)
     - FILE: Display a file (various formats supported)
     - LIST: Display structured rows using WoxPreviewListData JSON
     - REMOTE: Load preview data from a remote URL
@@ -88,6 +89,19 @@ class WoxPreviewType(str, Enum):
         preview = WoxPreview(
             preview_type=WoxPreviewType.URL,
             preview_data="https://example.com"
+        )
+    """
+
+    WEBVIEW = "webview"
+    """
+    Embedded browser content. Set either url or html in a JSON string.
+    Inline HTML has no plugin-relative base URL; use inline CSS and absolute resource URLs.
+    Optional keys: injectCss, userAgent, cacheDisabled, cacheKey.
+
+    Example:
+        preview = WoxPreview(
+            preview_type=WoxPreviewType.WEBVIEW,
+            preview_data=json.dumps({"html": "<!doctype html><html><body><h1>Hello Wox</h1></body></html>"}),
         )
     """
 
@@ -326,6 +340,7 @@ class WoxPreview:
     - TEXT: Plain text string
     - IMAGE: WoxImage serialized as "type:value" string
     - URL: HTTP/HTTPS URL
+    - WEBVIEW: JSON string with url or html, encoded using json.dumps
     - FILE: File system path
     - LIST: WoxPreviewListData JSON string
     - REMOTE: URL that returns WoxPreview JSON

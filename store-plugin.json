@@ -1231,5 +1231,37 @@
         "plugin_description": "在 Linkding 中搜索、保存和管理书签"
       }
     }
+  },
+  {
+    "Id": "35E4296B-89E2-492E-977B-0120ECCB5C95",
+    "Name": "i18n:plugin_name",
+    "Author": "qianlifeng",
+    "Version": "0.1.0",
+    "MinWoxVersion": "2.4.2",
+    "Runtime": "nodejs",
+    "Description": "i18n:plugin_description",
+    "IconUrl": "https://raw.githubusercontent.com/Wox-launcher/Wox.Plugin.Github/main/images/app.svg",
+    "Website": "https://github.com/Wox-launcher/Wox.Plugin.Github",
+    "DownloadUrl": "https://github.com/Wox-launcher/Wox.Plugin.Github/releases/latest/download/wox.plugin.github.wox",
+    "ScreenshotUrls": [
+      "https://raw.githubusercontent.com/Wox-launcher/Wox.Plugin.Github/main/screenshot.jpg"
+    ],
+    "SupportedOS": [
+      "Windows",
+      "Darwin",
+      "Linux"
+    ],
+    "DateCreated": "2026-09-06 18:03:00",
+    "DateUpdated": "2026-09-06 18:03:00",
+    "I18n": {
+      "en_US": {
+        "plugin_name": "GitHub",
+        "plugin_description": "Manage GitHub issues and notifications"
+      },
+      "zh_CN": {
+        "plugin_name": "GitHub",
+        "plugin_description": "管理 GitHub 的 issues 和通知"
+      }
+    }
   }
 ]

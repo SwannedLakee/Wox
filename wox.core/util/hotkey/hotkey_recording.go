@@ -1,6 +1,7 @@
 package hotkey
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"sort"
@@ -145,6 +146,24 @@ func (m *hotkeyRecordingSessionManager) Start(options recordingSessionOptions) (
 
 	state := newRecordingRawState(allowed, options.onRecorded)
 	listener, err := addRawKeyListener(state.HandleEvent)
+	util.GetLogger().Info(state.diagnosticCtx, fmt.Sprintf("hotkey recorder start: allowed=%v listenerError=%v backend={%s}", options.allowedKinds, err, keyboard.RawKeyboardDiagnostics()))
+	if err == nil {
+		// Sample even with no incoming events, including Secure Input changes during recording.
+		util.Go(state.diagnosticCtx, "hotkey recorder diagnostics", func() {
+			ticker := time.NewTicker(3 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-state.diagnosticCtx.Done():
+					return
+				case <-ticker.C:
+					util.GetLogger().Info(state.diagnosticCtx, "hotkey recorder backend: "+keyboard.RawKeyboardDiagnostics())
+				}
+			}
+		})
+	} else {
+		state.diagnosticCancel()
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -241,6 +260,11 @@ func recordingFallbackKinds(allowed map[hotkeyKind]bool) []hotkeyKind {
 // keeps recording state separate from registered hotkey runtime state so the
 // settings UI cannot perturb active global hotkeys.
 type recordingRawState struct {
+	diagnosticCtx     context.Context
+	diagnosticCancel  context.CancelFunc
+	eventCount        int
+	candidateCount    int
+	eventReasons      map[string]int
 	mu                sync.Mutex
 	allowed           map[hotkeyKind]bool
 	onRecorded        func(recordedHotkey)
@@ -255,7 +279,10 @@ type recordingRawState struct {
 }
 
 func newRecordingRawState(allowed map[hotkeyKind]bool, onRecorded func(recordedHotkey)) *recordingRawState {
+	ctx, cancel := context.WithCancel(util.NewTraceContext())
 	state := &recordingRawState{
+		eventReasons:  make(map[string]int),
+		diagnosticCtx: ctx, diagnosticCancel: cancel,
 		allowed:       allowed,
 		onRecorded:    onRecorded,
 		pressed:       map[keyboard.Key]bool{},
@@ -284,8 +311,11 @@ func newRecordingRawState(allowed map[hotkeyKind]bool, onRecorded func(recordedH
 }
 
 func (s *recordingRawState) Close() {
+	s.diagnosticCancel()
+	util.GetLogger().Info(s.diagnosticCtx, "hotkey recorder closing backend: "+keyboard.RawKeyboardDiagnostics())
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	util.GetLogger().Info(s.diagnosticCtx, fmt.Sprintf("hotkey recorder summary: events=%d candidates=%d reasons=%v pressedModifiers=%v", s.eventCount, s.candidateCount, s.eventReasons, s.currentGenericModifiersLocked()))
 
 	if s.holdPendingTimer != nil {
 		s.holdPendingTimer.Stop()
@@ -335,6 +365,25 @@ func (s *recordingRawState) HandleEvent(event keyboard.RawKeyEvent) bool {
 			recorded = append(recorded, recordedHotkey{Hotkey: hotkeyStr, Kind: hotkeyKindNormalCombo})
 			consume = true
 		}
+	}
+	s.eventCount++
+	reason := "modifier_or_keyup"
+	if event.Type == keyboard.EventTypeKeyDown && !isSpecificModifierKey(event.Key) {
+		switch {
+		case !s.allowed[hotkeyKindNormalCombo]:
+			reason = "normal_combo_not_allowed"
+		case normalKeyString(event.Key) == "":
+			reason = "unsupported_key"
+		case len(s.currentGenericModifiersLocked()) == 0 && !isFunctionKey(event.Key):
+			reason = "no_tracked_modifier"
+		default:
+			reason = "normal_combo_candidate"
+		}
+	}
+	s.eventReasons[reason]++
+	// Bound detail but retain totals; omit key codes/characters from rejected input.
+	if s.eventCount <= 40 {
+		util.GetLogger().Info(s.diagnosticCtx, fmt.Sprintf("hotkey recorder event: index=%d type=%d nativeType=%d nativeFlags=%x modifiers=%d trackedModifiers=%v unknownKey=%t reason=%s candidates=%d consumed=%t", s.eventCount, event.Type, event.NativeEventType, event.NativeFlags, event.Modifiers, s.currentGenericModifiersLocked(), event.Key == keyboard.KeyUnknown, reason, len(recorded), consume))
 	}
 	s.mu.Unlock()
 
@@ -535,6 +584,10 @@ func (s *recordingRawState) dispatchRecorded(recorded []recordedHotkey) {
 		if result.Hotkey == "" || result.Kind == hotkeyKindUnknown || s.onRecorded == nil {
 			continue
 		}
+		s.mu.Lock()
+		s.candidateCount++
+		s.mu.Unlock()
+		util.GetLogger().Info(s.diagnosticCtx, fmt.Sprintf("hotkey recorder dispatch: hotkey=%s kind=%s", result.Hotkey, result.Kind))
 		s.onRecorded(result)
 	}
 }

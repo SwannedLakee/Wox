@@ -18,6 +18,32 @@ static CFRunLoopSourceRef gRawKeyboardEventTapSource = NULL;
 static IOHIDManagerRef gPhysicalKeyboardManager = NULL;
 static BOOL gPhysicalKeyboardManagerReady = NO;
 static BOOL gPhysicalCapsLockPressed = NO;
+// Aggregate event counts locate delivery failures without retaining key codes or text.
+static unsigned long long gRawDownCount, gRawUpCount, gRawFlagsCount;
+static unsigned long long gRawTimeoutCount, gRawDisabledCount, gRawConversionFailureCount;
+
+// Called on the main thread, alongside the event tap callback.
+char *woxDarwinKeyboardDiagnostics(void) {
+    @autoreleasepool {
+        char *buffer = calloc(1024, 1);
+        if (!buffer) {
+            return NULL;
+        }
+        TISInputSourceRef source = TISCopyCurrentKeyboardInputSource();
+        NSString *sourceID = source ? (__bridge NSString *)TISGetInputSourceProperty(source, kTISPropertyInputSourceID) : nil;
+        snprintf(buffer, 1024,
+                 "secureInput=%d accessibility=%d listenAccess=%d tapExists=%d tapEnabled=%d physicalMonitor=%d appActive=%d frontPid=%d frontApp=%s inputSource=%s down=%llu up=%llu flags=%llu timeouts=%llu disabled=%llu conversionFailures=%llu",
+                 IsSecureEventInputEnabled(), AXIsProcessTrusted(), CGPreflightListenEventAccess(),
+                 gRawKeyboardEventTap != NULL, gRawKeyboardEventTap && CGEventTapIsEnabled(gRawKeyboardEventTap),
+                 gPhysicalKeyboardManagerReady, NSApp.active, NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier,
+                 NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier.UTF8String ?: "unknown", sourceID.UTF8String ?: "unknown",
+                 gRawDownCount, gRawUpCount, gRawFlagsCount, gRawTimeoutCount, gRawDisabledCount, gRawConversionFailureCount);
+        if (source) {
+            CFRelease(source);
+        }
+        return buffer;
+    }
+}
 
 static char *copyErrorMessage(const char *message) {
     if (!message) {
@@ -281,6 +307,8 @@ int woxDarwinUnregisterHotkey(int id, char **errorOut) {
 static CGEventRef rawKeyboardEventTapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon) {
     @autoreleasepool {
         if (type == kCGEventTapDisabledByTimeout || type == kCGEventTapDisabledByUserInput) {
+            if (type == kCGEventTapDisabledByTimeout) gRawTimeoutCount++;
+            else gRawDisabledCount++;
             if (gRawKeyboardEventTap) {
                 CGEventTapEnable(gRawKeyboardEventTap, true);
             }
@@ -298,18 +326,22 @@ static CGEventRef rawKeyboardEventTapCallback(CGEventTapProxy proxy, CGEventType
         int eventKind = -1;
 
         if (type == kCGEventFlagsChanged) {
+            gRawFlagsCount++;
             if (!isModifierKeyCode(keyCode)) {
                 return event;
             }
             eventKind = modifierKeyPressedFromCGFlags(keyCode, flags) ? 0 : 1;
         } else if (type == kCGEventKeyDown) {
+            gRawDownCount++;
             NSEvent *nsEvent = [NSEvent eventWithCGEvent:event];
             if (!nsEvent) {
+                gRawConversionFailureCount++;
                 return event;
             }
             eventKind = 0;
             character = currentCharacterCode(nsEvent);
         } else if (type == kCGEventKeyUp) {
+            gRawUpCount++;
             eventKind = 1;
         }
 

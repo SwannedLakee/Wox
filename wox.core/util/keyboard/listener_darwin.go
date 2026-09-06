@@ -12,6 +12,7 @@ int woxDarwinRegisterHotkey(int id, unsigned int modifiers, unsigned int keyCode
 int woxDarwinUnregisterHotkey(int id, char **errorOut);
 int woxDarwinSetRawKeyboardHookEnabled(int enabled, char **errorOut);
 int woxDarwinHasRawKeyboardAccess(void);
+char *woxDarwinKeyboardDiagnostics(void);
 */
 import "C"
 
@@ -47,6 +48,22 @@ var (
 
 func init() {
 	reconcileRawKeyListenerAccessWithPermissionStatusPlatform = reconcileRawKeyListenerAccessWithPermissionStatusDarwin
+	RawKeyboardDiagnostics = rawKeyboardDiagnosticsDarwin
+}
+
+// rawKeyboardDiagnosticsDarwin reads native state on its owning thread and Go subscription state under its lock.
+func rawKeyboardDiagnosticsDarwin() string {
+	var snapshot string
+	mainthread.Call(func() {
+		value := C.woxDarwinKeyboardDiagnostics()
+		if value != nil {
+			snapshot = C.GoString(value)
+			C.free(unsafe.Pointer(value))
+		}
+	})
+	managerMu.Lock()
+	defer managerMu.Unlock()
+	return fmt.Sprintf("%s listeners=%d enabled=%t deferred=%t accessKnown=%t accessGranted=%t", snapshot, len(rawKeyListeners), rawHookIsEnabled, rawHookIsDeferred, rawHookAccessKnown, rawHookAccessGranted)
 }
 
 func RegisterGlobalHotkey(modifiers Modifier, key Key, callback func()) (HotkeyRegistration, error) {

@@ -7,6 +7,34 @@ import (
 	"wox/util/keyboard"
 )
 
+// TestRecordingDiagnosticsCountsPastDetailLimit checks that diagnostics preserve rejection evidence without changing recording.
+func TestRecordingDiagnosticsCountsPastDetailLimit(t *testing.T) {
+	var candidates []recordedHotkey
+	state := newRecordingRawState(hotkeyKindSet([]hotkeyKind{hotkeyKindNormalCombo}), func(candidate recordedHotkey) {
+		candidates = append(candidates, candidate)
+	})
+	for i := 0; i < 45; i++ {
+		if state.HandleEvent(keyboard.RawKeyEvent{Type: keyboard.EventTypeKeyDown, Key: keyboard.KeyA}) {
+			t.Fatal("unmodified letter was consumed")
+		}
+	}
+	state.HandleEvent(keyboard.RawKeyEvent{Type: keyboard.EventTypeKeyDown, Key: keyboard.KeyLeftCtrl})
+	state.HandleEvent(keyboard.RawKeyEvent{Type: keyboard.EventTypeKeyDown, Key: keyboard.KeyUnknown})
+	if !state.HandleEvent(keyboard.RawKeyEvent{Type: keyboard.EventTypeKeyDown, Key: keyboard.KeyA}) {
+		t.Fatal("normal combo was not consumed")
+	}
+	state.Close()
+	if state.eventCount != 48 || state.candidateCount != 1 || state.eventReasons["no_tracked_modifier"] != 45 || state.eventReasons["unsupported_key"] != 1 || state.eventReasons["normal_combo_candidate"] != 1 {
+		t.Fatalf("unexpected diagnostics: events=%d candidates=%d reasons=%v", state.eventCount, state.candidateCount, state.eventReasons)
+	}
+	if len(candidates) != 1 || candidates[0].Hotkey != "ctrl+a" {
+		t.Fatalf("recording changed: %+v", candidates)
+	}
+	if state.diagnosticCtx.Err() == nil {
+		t.Fatal("closing recorder did not cancel diagnostics")
+	}
+}
+
 func TestRecordingSessionAllowsOnlyNormalComboFallbackWhenRawUnavailable(t *testing.T) {
 	restore := replaceRawKeyListenerForTest(t, func(handler keyboard.RawKeyHandler) (keyboard.RawKeySubscription, error) {
 		return nil, errors.New("raw listener unavailable")

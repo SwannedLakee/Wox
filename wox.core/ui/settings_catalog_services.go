@@ -52,6 +52,7 @@ func (s *CoreServices) StartHotkeyRecording(ctx context.Context, sessionID strin
 		// Pending raw subscriptions are valid for global hotkeys, but cannot record
 		// input yet. Probe again on each attempt so granting access allows a retry.
 		status, err := s.MacOSPermissionStatus(ctx, sessionID)
+		util.GetLogger().Info(ctx, fmt.Sprintf("hotkey recording permission probe: session=%s status=%+v error=%v", sessionID, status, err))
 		if err != nil {
 			return contract.HotkeyRecordingCapability{}, err
 		}

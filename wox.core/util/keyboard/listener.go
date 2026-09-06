@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+// RawKeyboardDiagnostics snapshots backend health without collecting typed text.
+// Native counters are cumulative; compare snapshots around a recording session.
+var RawKeyboardDiagnostics = func() string { return "backend diagnostics unavailable" }
+
 var reconcileRawKeyListenerAccessWithPermissionStatusPlatform = func(accessibilityGranted bool) error { return nil }
 
 // ReconcileRawKeyListenerAccessWithPermissionStatus applies a freshly probed macOS permission state to pending listeners.

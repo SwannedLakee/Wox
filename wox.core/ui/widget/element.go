@@ -179,6 +179,13 @@ func (w Stateful) layoutEphemeral(ctx context, available constraints) *node {
 		return &node{key: w.Key, kind: "stateful"}
 	}
 	childNode := child.layout(ctx, available)
+	// Verification uses ephemeral state; its identity must match retained layout.
+	if childNode.key == "" {
+		childNode.key = w.Key
+	}
+	if childNode.kind == "" {
+		childNode.kind = "stateful"
+	}
 	state.Dispose()
 	temporary.mounted.Store(false)
 	return childNode

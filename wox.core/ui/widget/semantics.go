@@ -57,7 +57,7 @@ func (w Keyed) layout(ctx context, available constraints) *node {
 	if w.Child == nil {
 		return &node{key: w.Key, kind: "keyed"}
 	}
-	child := w.Child.layout(ctx, available)
+	child := layoutBehaviorChild(ctx, available, w.Child)
 	child.key = w.Key
 	if child.kind == "" {
 		child.kind = "keyed"
@@ -89,6 +89,10 @@ type Semantics struct {
 
 func (w Semantics) layout(ctx context, available constraints) *node {
 	child := layoutBehaviorChild(ctx, available, w.Child)
+	if child.semantic != nil && child.semantic.automationID != "" && child.semantic.automationID != w.AutomationID {
+		// Nested semantic controls must keep separate automation identities.
+		child = &node{bounds: woxui.Rect{Width: child.bounds.Width, Height: child.bounds.Height}, children: []*node{child}}
+	}
 	if w.Key != "" {
 		child.key = w.Key
 	}
@@ -286,9 +290,14 @@ func (w EditableText) layout(ctx context, available constraints) *node {
 	return child
 }
 
+// layoutBehaviorChild isolates retained roots from mutations by outer behavior widgets.
 func layoutBehaviorChild(ctx context, available constraints, child Widget) *node {
 	if child == nil {
 		return &node{bounds: woxui.Rect{Width: available.width, Height: available.height}}
 	}
-	return child.layout(ctx, available)
+	result := child.layout(ctx, available)
+	if result.boundary != nil {
+		return &node{bounds: woxui.Rect{Width: result.bounds.Width, Height: result.bounds.Height}, children: []*node{result}}
+	}
+	return result
 }

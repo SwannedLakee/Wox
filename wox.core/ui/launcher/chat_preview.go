@@ -490,14 +490,34 @@ func chatPreviewDataAndKey(result queryResult, preview queryPreview) (chatPrevie
 
 // activateChatPreview bootstraps shared chat state without overwriting newer streamed snapshots.
 func (a *App) activateChatPreview(result queryResult, preview queryPreview) error {
-	// Both chat entrances share the live conversation. Query lifecycle resets
-	// fullscreen when leaving chat, so ordinary searches still get fresh previews.
-	if (a.chatWindowOpen() || a.chatFullscreen) && a.chatPreview != nil {
+	// A new launcher query must not replace the shared conversation, but the
+	// originating result can still publish preview updates while fullscreen.
+	if a.chatPreview != nil && (a.chatWindowOpen() || a.chatFullscreen && (a.chatPreview.queryID != result.QueryID || a.chatPreview.resultID != result.ID)) {
 		return nil
 	}
 	data, key, err := chatPreviewDataAndKey(result, preview)
 	if err != nil {
 		return err
+	}
+	if state := a.chatPreview; state != nil && state.queryID == result.QueryID && state.resultID == result.ID && state.chat.ID == data.ActiveChat.ID && data.ActiveChatID == "" {
+		if state.key != key {
+			// Complete previews update conversation data, not draft, scroll, or ask_user ownership.
+			// Once the chat service has published a snapshot, it remains authoritative.
+			state.key = key
+			if state.remoteVersion == 0 {
+				state.chat = cloneChatData(data.ActiveChat)
+				state.chats = append([]chatData(nil), data.Chats...)
+				sortChatSummaries(state.chats)
+				if state.nextModel != nil {
+					state.chat.Model = *state.nextModel
+				}
+				state.loading = false
+				if state.autoFollow {
+					state.scroll = float32(math.MaxFloat32)
+				}
+			}
+		}
+		return nil
 	}
 	changed := a.chatPreview != nil && a.chatPreview.key != key
 	keepFullscreen := a.chatFullscreen

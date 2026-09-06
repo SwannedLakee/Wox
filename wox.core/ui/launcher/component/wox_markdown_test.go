@@ -259,14 +259,20 @@ func TestMarkdownLinkUsesHandCursor(t *testing.T) {
 }
 
 func TestWoxMarkdownUsesSelectableTextWhenWindowIsSet(t *testing.T) {
+	const body = "Copy this and that."
 	widget := WoxMarkdown(MarkdownProps{
 		ID: "md", Document: ParseMarkdown("Copy **this** and [that](https://wox.one)."),
 		Width: 300, Window: &woxui.Window{}, Theme: Theme{PreviewText: woxui.Color{A: 255}},
 		OnOpenLink: func(string) {},
 	})
 	flex := widget.(woxwidget.Flex)
-	if _, ok := flex.Children[0].(woxwidget.Stateful); !ok {
+	field, ok := flex.Children[0].(woxwidget.Stateful)
+	if !ok {
 		t.Fatalf("child = %T, want a read-only text field for selection", flex.Children[0])
+	}
+	props := field.Widget.(TextFieldProps)
+	if props.ID != "md-text-1" || props.Label != body || props.Value != body || !props.ReadOnly {
+		t.Fatalf("selectable markdown field = %#v, want labeled read-only text %q", props, body)
 	}
 }
 
@@ -285,6 +291,9 @@ func TestWoxMarkdownSelectAllCopiesPlainText(t *testing.T) {
 	host.AttachServices(&hotkeyRecorderHostServices{})
 	displayList := &woxui.DisplayList{}
 	host.Frame(displayList, woxui.FrameInfo{Size: woxui.Size{Width: 300, Height: 80}, PixelSize: woxui.PixelSize{Width: 300, Height: 80}, Scale: 1})
+	if diagnostics := host.Snapshot().Diagnostics; len(diagnostics) > 0 {
+		t.Fatalf("selectable markdown semantics diagnostics: %v", diagnostics)
+	}
 	host.RequestFocus("md-text-1")
 	primary := woxui.KeyModifierControl | woxui.KeyModifierMeta
 	if !host.Key(woxui.KeyEvent{Key: woxui.Key("a"), Modifiers: primary, Down: true}) {

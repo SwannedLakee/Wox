@@ -25,14 +25,13 @@ const (
 	// Product target for hotkey-to-visible / activation latency. This is the
 	// "press the shortcut and it is already there" SLA, not the smoke gate.
 	showToVisibleTargetP95 = 120 * time.Millisecond
-	// Order-of-magnitude guard so a stalled show path fails CI without treating
-	// a loaded runner as a 120ms regression detector.
+	// Local smoke ceiling; shared CI gets the same multiplier as frame phases.
 	showToVisibleBudgetP95 = 300 * time.Millisecond
 )
 
 // Test007ShowToVisibleLatency measures in-process activation latency after a hidden launcher is shown.
 // Flow: hide the primary launcher -> show through the product window path -> wait for the query input and a presented frame.
-// Evidence: twenty steady hide/show cycles report p50/p95/max, and p95 stays under the catastrophic 300ms smoke gate.
+// Evidence: twenty steady hide/show cycles report p50/p95/max against the local or CI smoke ceiling.
 func Test007ShowToVisibleLatency(t *testing.T) {
 	smoke.Case(t, func(ctx context.Context, client *automationdriver.Client) {
 		samples := make([]time.Duration, 0, showToVisibleWarmupSamples+showToVisibleSampleCount)
@@ -55,8 +54,8 @@ func Test007ShowToVisibleLatency(t *testing.T) {
 			p95 <= showToVisibleTargetP95,
 			formatDurationMillis(steady),
 		)
-		if p95 > showToVisibleBudgetP95 {
-			t.Fatalf("show-to-visible p95 %.1fms exceeded %dms smoke budget", durationMilliseconds(p95), showToVisibleBudgetP95.Milliseconds())
+		if budget := showToVisibleBudgetP95 * time.Duration(perfTimingBudgetMultiplier()); p95 > budget {
+			t.Fatalf("show-to-visible p95 %.1fms exceeded %dms smoke budget", durationMilliseconds(p95), budget.Milliseconds())
 		}
 	})
 }
@@ -162,7 +161,7 @@ func writeShowToVisibleArtifact(t *testing.T, all, steady []time.Duration, p50, 
 		"case":              t.Name(),
 		"metric":            "show_to_visible",
 		"target_p95_ms":     durationMilliseconds(showToVisibleTargetP95),
-		"budget_p95_ms":     durationMilliseconds(showToVisibleBudgetP95),
+		"budget_p95_ms":     durationMilliseconds(showToVisibleBudgetP95 * time.Duration(perfTimingBudgetMultiplier())),
 		"warmup_samples":    showToVisibleWarmupSamples,
 		"steady_samples":    len(steady),
 		"p50_ms":            durationMilliseconds(p50),

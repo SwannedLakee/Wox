@@ -569,6 +569,53 @@ func TestBoundaryVerifyComparesUnexportedGestureCallbacksWithoutPanic(t *testing
 	}
 }
 
+// TestBoundaryOuterBehaviorsPreserveCachedRoot covers wrappers that add identity and callbacks.
+func TestBoundaryOuterBehaviorsPreserveCachedRoot(t *testing.T) {
+	for _, wrapper := range []string{"semantics", "keyed", "focus", "scope", "gesture"} {
+		t.Run(wrapper, func(t *testing.T) {
+			host := NewHost(func(woxui.FrameInfo) Widget {
+				var child Widget = Boundary[boundaryTestProps]{Key: "inner", Props: boundaryTestProps{}, Build: func(boundaryTestProps) Widget {
+					return Semantics{AutomationID: "inner", Role: woxui.AccessibilityRoleListItem, Child: LazyList{
+						Key: "list", Width: 20, Viewport: 20, ItemCount: 1,
+						ItemExtentAt: func(int) float32 { return 20 },
+						ItemBuilder:  func(int) Widget { return Container{Width: 20, Height: 20} },
+					}}
+				}}
+				switch wrapper {
+				case "semantics":
+					child = Semantics{Key: "outer", AutomationID: "outer", Role: woxui.AccessibilityRoleList, Child: child}
+				case "keyed":
+					child = Keyed{Key: "outer", Child: child}
+				case "focus":
+					child = Focusable{Key: "outer", Child: child}
+				case "scope":
+					child = FocusScope{Key: "outer", Child: child}
+				case "gesture":
+					child = Gesture{ID: "outer", OnTap: func() {}, Child: child}
+				}
+				return Semantics{AutomationID: "root", Label: "Root", Role: woxui.AccessibilityRoleList, Child: child}
+			})
+			host.AttachServices(&fakeHostServices{})
+			if err := host.SetRepaintDebugMode(RepaintDebugVerify); err != nil {
+				t.Fatal(err)
+			}
+			for range 3 {
+				renderBoundaryTestFrame(host, 100)
+				if snapshot := host.Snapshot(); len(snapshot.Diagnostics) != 0 {
+					t.Fatalf("wrapper corrupted cached root: %v", snapshot.Diagnostics)
+				}
+			}
+			ids := map[string]bool{}
+			for _, node := range host.Snapshot().Tree.Nodes {
+				ids[node.AutomationID] = true
+			}
+			if !ids["inner"] || !ids["root"] || wrapper == "semantics" && !ids["outer"] {
+				t.Fatalf("nested semantics lost identities: %v", ids)
+			}
+		})
+	}
+}
+
 func TestHostRepaintDebugModeValidatesRuntimeSwitch(t *testing.T) {
 	services := &fakeHostServices{}
 	host := NewHost(func(woxui.FrameInfo) Widget { return Container{Width: 20, Height: 20} })

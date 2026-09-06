@@ -1537,7 +1537,7 @@ type Gesture struct {
 }
 
 func (w Gesture) layout(ctx context, available constraints) *node {
-	child := w.Child.layout(ctx, available)
+	child := layoutBehaviorChild(ctx, available, w.Child)
 	target := child
 	if child.gesture != nil {
 		target = &node{

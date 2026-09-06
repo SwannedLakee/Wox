@@ -110,6 +110,72 @@ func TestApplyResultsEntersChatModeFromLayout(t *testing.T) {
 	if !app.chatFullscreen || app.chatPreview == nil || !app.chatPreview.active {
 		t.Fatalf("chat mode state = fullscreen:%v preview:%+v", app.chatFullscreen, app.chatPreview)
 	}
+	preview := queryPreview{PreviewType: "chat", PreviewData: `{"ActiveChat":{"Id":"chat","IsStreaming":true}}`}
+	result := app.results[0]
+	if err := app.activateChatPreview(result, preview); err != nil {
+		t.Fatal(err)
+	}
+	if !app.chatPreview.chat.IsStreaming || !app.chatFullscreen {
+		t.Fatal("fullscreen chat ignored its originating result's preview update")
+	}
+	preview.PreviewData = `{"ActiveChat":{"Id":"chat","IsStreaming":false}}`
+	if err := app.activateChatPreview(result, preview); err != nil {
+		t.Fatal(err)
+	}
+	if app.chatPreview.chat.IsStreaming || !app.chatFullscreen {
+		t.Fatal("fullscreen chat did not finish the stream")
+	}
+}
+
+// TestChatPreviewUpdatesPreserveLocalState covers embedded and fullscreen stream updates.
+func TestChatPreviewUpdatesPreserveLocalState(t *testing.T) {
+	for _, fullscreen := range []bool{false, true} {
+		t.Run(fmt.Sprintf("fullscreen=%v", fullscreen), func(t *testing.T) {
+			app := New(false, nil)
+			defer app.cancel()
+			result := queryResult{ID: "result", QueryID: "query"}
+			preview := queryPreview{PreviewType: "chat", PreviewData: `{"ActiveChat":{"Id":"chat"}}`}
+			if err := app.activateChatPreview(result, preview); err != nil {
+				t.Fatal(err)
+			}
+			app.chatFullscreen = fullscreen
+			state := app.chatPreview
+			state.editor = woxui.NewTextEditor("unsent draft")
+			state.scroll, state.autoFollow = 42, false
+			state.expandedRounds["round"] = true
+			question := &aiQuestion{QuestionID: "pending"}
+			state.question = question
+			state.questionEditor = woxui.NewTextEditor("partial answer")
+			state.nextModel = &aiModel{Name: "next-model"}
+			state.attachments = []common.AIChatAttachment{{ID: "draft-attachment"}}
+			for _, streaming := range []bool{true, false} {
+				preview.PreviewData = fmt.Sprintf(`{"ActiveChat":{"Id":"chat","IsStreaming":%t}}`, streaming)
+				if err := app.activateChatPreview(result, preview); err != nil {
+					t.Fatal(err)
+				}
+				if app.chatPreview != state || state.editor.State().Text != "unsent draft" || state.scroll != 42 || state.autoFollow || !state.expandedRounds["round"] {
+					t.Fatal("stream update discarded local interaction state")
+				}
+				if state.question != question || state.questionEditor.State().Text != "partial answer" || len(state.attachments) != 1 || state.attachments[0].ID != "draft-attachment" {
+					t.Fatal("stream update discarded the pending question or draft attachments")
+				}
+				if state.chat.IsStreaming != streaming || state.chat.Model.Name != "next-model" || app.chatFullscreen != fullscreen {
+					t.Fatal("stream update lost remote data, model selection, or fullscreen ownership")
+				}
+				if _, err := app.chatPreviewSnapshotFor(result, preview); err != nil {
+					t.Fatalf("updated preview identity is not renderable: %v", err)
+				}
+			}
+			app.applyChatResponse(chatData{ID: "chat", Title: "newer service snapshot"})
+			preview.PreviewData = `{"ActiveChat":{"Id":"chat","Title":"stale preview"}}`
+			if err := app.activateChatPreview(result, preview); err != nil {
+				t.Fatal(err)
+			}
+			if state.chat.Title != "newer service snapshot" {
+				t.Fatal("preview overwrote the authoritative chat service snapshot")
+			}
+		})
+	}
 }
 
 func TestLauncherGridHidesRegularPreview(t *testing.T) {

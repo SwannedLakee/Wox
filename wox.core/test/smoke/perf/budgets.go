@@ -2,9 +2,21 @@
 
 package perf
 
-import "runtime"
+import (
+	"os"
+	"runtime"
+)
 
-// Frame phase ceilings in microseconds, applied to the steady-state maximum of every scenario.
+// perfTimingBudgetMultiplier gives shared runners scheduling headroom while retaining a hard ceiling.
+func perfTimingBudgetMultiplier() int64 {
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		return 5
+	}
+	return 1
+}
+
+// Local frame phase ceilings in microseconds, applied to each scenario's steady-state maximum.
+// GitHub Actions uses five times these ceilings; deterministic work limits remain unchanged.
 //
 // These are order-of-magnitude guards, not regression detectors. Each value is about five times
 // the highest steady-state P95 measured across the perf scenarios on a developer machine, with a

@@ -18,6 +18,27 @@ import (
 	woxwidget "wox/ui/widget"
 )
 
+// TestPhaseBudgetsRejectSingleOutlier keeps strict runs subject to the original ceiling.
+func TestPhaseBudgetsRejectSingleOutlier(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "false")
+	samples := make([]woxui.FrameMetricsSample, perfSampleCount-perfWarmupSamples)
+	if err := checkPhaseBudgets(samples); err != nil {
+		t.Fatal(err)
+	}
+	samples[len(samples)-1].AccessibilityMicroseconds = perfAccessibilityBudgetMicroseconds + 1
+	if err := checkPhaseBudgets(samples); err == nil {
+		t.Fatal("one slow frame must still exceed the strict budget")
+	}
+	t.Setenv("GITHUB_ACTIONS", "true")
+	if err := checkPhaseBudgets(samples); err != nil {
+		t.Fatalf("CI budget should tolerate a small local overrun: %v", err)
+	}
+	samples[len(samples)-1].AccessibilityMicroseconds = 5*perfAccessibilityBudgetMicroseconds + 1
+	if err := checkPhaseBudgets(samples); err == nil {
+		t.Fatal("CI must still reject a frame beyond its expanded ceiling")
+	}
+}
+
 // TestSnapshotQuietIgnoresRedraws waits through content changes but not repeated identical frames.
 func TestSnapshotQuietIgnoresRedraws(t *testing.T) {
 	var calls, lastChange atomic.Int64

@@ -737,7 +737,7 @@ func markdownSelectableText(id, value string, rich []TextFieldRichRun, links []m
 		}
 	}
 	return WoxTextField(TextFieldProps{
-		ID: id, Width: width, Height: height, Padding: woxwidget.Insets{Bottom: 1},
+		ID: id, Label: value, Width: width, Height: height, Padding: woxwidget.Insets{Bottom: 1},
 		Transparent: true, DisableHover: true, Style: style, RichRuns: rich, LineHeight: lineHeight,
 		TextColor: props.Theme.PreviewText, Value: value, ReadOnly: true, MaxLines: max(8, len(lines)+4),
 		Window: props.Window, Theme: props.Theme, OnTapOffset: onTapOffset, CursorAtOffset: cursorAt,

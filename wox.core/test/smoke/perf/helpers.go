@@ -270,17 +270,27 @@ func perfPhaseBudgets() []phaseBudget {
 // ordinary CI scheduling noise is not.
 func assertPhaseBudgets(t *testing.T, steady []woxui.FrameMetricsSample) {
 	t.Helper()
+	if err := checkPhaseBudgets(steady); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// checkPhaseBudgets compares timings without changing the deterministic work assertions.
+func checkPhaseBudgets(steady []woxui.FrameMetricsSample) error {
 	var totalMax int64
+	multiplier := perfTimingBudgetMultiplier()
 	for _, budget := range perfPhaseBudgets() {
+		budget.limit *= multiplier
 		observed := maxInt64(phaseValues(steady, budget.value))
 		totalMax += observed
 		if observed > budget.limit {
-			t.Fatalf("steady max %s %dus exceeded %dus", budget.name, observed, budget.limit)
+			return fmt.Errorf("steady max %s %dus exceeded %dus", budget.name, observed, budget.limit)
 		}
 	}
-	if totalMax > perfFrameBudgetMicroseconds() {
-		t.Fatalf("steady max phase total %dus exceeded %dus", totalMax, perfFrameBudgetMicroseconds())
+	if limit := perfFrameBudgetMicroseconds() * multiplier; totalMax > limit {
+		return fmt.Errorf("steady max phase total %dus exceeded %dus", totalMax, limit)
 	}
+	return nil
 }
 
 func phaseValues(samples []woxui.FrameMetricsSample, value func(woxui.FrameMetricsSample) int64) []int64 {
@@ -354,8 +364,9 @@ func writePerfArtifact(t *testing.T, samples []woxui.FrameMetricsSample) {
 		t.Fatalf("create perf artifact directory: %v", err)
 	}
 	payload, err := json.MarshalIndent(map[string]any{
-		"case":    t.Name(),
-		"samples": samples,
+		"case":                   t.Name(),
+		"samples":                samples,
+		"timingBudgetMultiplier": perfTimingBudgetMultiplier(),
 	}, "", "  ")
 	if err != nil {
 		t.Fatalf("encode perf artifact: %v", err)

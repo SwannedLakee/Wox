@@ -1,6 +1,8 @@
 package preview
 
 import (
+	"strings"
+
 	woxcomponent "wox/ui/launcher/component"
 	woxui "wox/ui/runtime"
 	woxwidget "wox/ui/widget"
@@ -52,8 +54,10 @@ func editorPreviewShell(props editorPreviewShellProps) woxwidget.Widget {
 	children = append(children, props.BeforeBody...)
 	children = append(children, body)
 	if props.ShowError {
-		children = append(children, woxwidget.Container{Width: innerWidth, Height: errorHeight, Padding: woxwidget.Insets{Top: 7}, Child: woxwidget.Text{
-			Value: props.Error, Style: woxui.TextStyle{Size: 11}, Color: props.Theme.ErrorText,
+		children = append(children, woxwidget.Container{Width: innerWidth, Height: errorHeight, Padding: woxwidget.Insets{Top: 7}, Child: woxwidget.Semantics{
+			AutomationID: editorPreviewErrorID(props.ScrollID), Role: woxui.AccessibilityRoleText, Label: props.Error, Value: props.Error,
+			LiveRegion: woxui.AccessibilityLiveRegionPolite,
+			Child:      woxwidget.Text{Value: props.Error, Style: woxui.TextStyle{Size: 11}, Color: props.Theme.ErrorText},
 		}})
 	}
 	children = append(children, footer)
@@ -61,4 +65,12 @@ func editorPreviewShell(props editorPreviewShellProps) woxwidget.Widget {
 		Width: props.Width, Height: props.Height, Padding: props.Padding,
 		Child: woxwidget.Flex{Axis: woxwidget.Vertical, Children: children},
 	}
+}
+
+// editorPreviewErrorID derives the validation-error automation ID from the preview scroll surface.
+func editorPreviewErrorID(scrollID string) string {
+	if strings.TrimSpace(scrollID) == "" {
+		return "editor-preview-error"
+	}
+	return strings.TrimSuffix(scrollID, "-scroll") + "-error"
 }

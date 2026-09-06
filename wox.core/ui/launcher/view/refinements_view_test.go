@@ -23,8 +23,8 @@ func TestRefinementControlsUseFlutterTranslucentFill(t *testing.T) {
 		},
 		Groups: []RefinementGroup{{Title: "Type", Hotkey: "Cmd+T", Options: []RefinementOption{{Value: "all", Label: "All", Selected: true}, {Value: "text", Label: "Text"}}}},
 	}).(woxwidget.Container)
-	scroll := controls.Child.(woxwidget.ScrollView)
-	content := scroll.Child.(woxwidget.Flex).Children[0].(woxwidget.Container)
+	scroll, scrollContent := refinementScroll(t, controls.Child)
+	content := scrollContent.(woxwidget.Flex).Children[0].(woxwidget.Container)
 
 	if !scroll.Horizontal || content.Width >= scroll.Width {
 		t.Fatalf("refinement strip = %#v with shell width %v, want shrink-wrapped horizontal scroller", scroll, content.Width)
@@ -58,6 +58,30 @@ func TestRefinementControlsUseFlutterTranslucentFill(t *testing.T) {
 	}
 	if color := refinementColorWithOpacity(queryText, 0.075); color.A != 19 {
 		t.Fatalf("refinement alpha = %d, want Flutter absolute 0.075 alpha", color.A)
+	}
+}
+
+func TestRefinementStripUsesSharedHorizontalScrollbar(t *testing.T) {
+	groups := []RefinementGroup{
+		{Title: "Unread", Options: []RefinementOption{{Value: "unread", Label: "Unread only"}}},
+		{Title: "Type", Options: []RefinementOption{{Value: "issue", Label: "Issue"}, {Value: "pr", Label: "Pull Request"}, {Value: "release", Label: "Release"}}},
+		{Title: "Repository", Options: []RefinementOption{{Value: "wox", Label: "Wox-launcher/Wox"}, {Value: "other", Label: "other/repo"}}},
+	}
+	controls := RefinementsView(RefinementsProps{
+		Width:  320,
+		Height: 44,
+		Theme:  woxcomponent.Theme{ResultTitle: woxui.Color{R: 210, G: 220, B: 230, A: 255}},
+		Groups: groups,
+	}).(woxwidget.Container)
+	props, _ := refinementScroll(t, controls.Child)
+	if !props.Horizontal || props.AlwaysShowScrollbar || props.Key != "launcher-refinements-scroll" {
+		t.Fatalf("refinement scroll = %#v, want hover-revealed horizontal WoxScrollView", props)
+	}
+	if props.ContentWidth <= props.Width {
+		t.Fatalf("refinement content width = %v, want greater than viewport %v", props.ContentWidth, props.Width)
+	}
+	if props.ThumbColor != (woxui.Color{R: 210, G: 220, B: 230, A: 255}) {
+		t.Fatalf("refinement thumb = %#v, want result title color", props.ThumbColor)
 	}
 }
 
@@ -95,4 +119,19 @@ func TestRefinementBoundaryEqualCoversAllFields(t *testing.T) {
 	woxwidget.AssertEqualCoversAllFields(t, RefinementOption{})
 	woxwidget.AssertEqualCoversAllFields(t, RefinementGroup{})
 	woxwidget.AssertEqualCoversAllFields(t, RefinementsProps{})
+}
+
+func refinementScroll(t *testing.T, view woxwidget.Widget) (woxcomponent.ScrollViewProps, woxwidget.Widget) {
+	t.Helper()
+	switch typed := view.(type) {
+	case woxwidget.Stateful:
+		props := typed.Widget.(woxcomponent.ScrollViewProps)
+		return props, props.Content
+	case woxwidget.Gesture:
+		scroll := typed.Child.(woxwidget.Stack).Children[0].Child.(woxwidget.ScrollView)
+		return woxcomponent.ScrollViewProps{Width: scroll.Width, ContentWidth: scroll.ContentWidth, Horizontal: scroll.Horizontal}, scroll.Child
+	default:
+		t.Fatalf("refinement scroll = %T, want WoxScrollView", view)
+		return woxcomponent.ScrollViewProps{}, nil
+	}
 }

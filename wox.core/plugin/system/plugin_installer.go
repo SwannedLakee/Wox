@@ -205,7 +205,9 @@ func (i *PluginInstallerPlugin) queryForSelectionFile(ctx context.Context, fileP
 			PreviewType: plugin.WoxPreviewTypePluginDetail,
 			PreviewData: string(pluginDetailJSON),
 		},
-		Score: 2000,
+		// Outrank generic selection results such as AI Chat (2000). Equal
+		// scores fall back to title sort, which puts "Ask in AI Chat" first.
+		Score: 3000,
 	})
 
 	return results

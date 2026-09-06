@@ -43,8 +43,27 @@ interface Query {
   TriggerKeyword: string;
   Command: string;
   Search: string;
+  Refinements?: { [id: string]: string }; // selected refinement values
 }
 ```
+
+### QueryRefinement
+
+Return refinements on `QueryResponse.Refinements`. Read selected values from `query.Refinements` on the next query. See `references/refinements.md`.
+
+```typescript
+interface QueryRefinement {
+  Id: string;
+  Title: string;
+  Type: "singleSelect" | "multiSelect" | "toggle" | "sort";
+  Options: QueryRefinementOption[];
+  DefaultValue?: string[];
+  Hotkey: string; // cmd+t on macOS, ctrl+t on Windows/Linux
+  Persist?: boolean;
+}
+```
+
+`Hotkey` must be a real platform chord: `cmd+<key>` on macOS and `ctrl+<key>` on Windows/Linux. Detect `process.platform === "darwin"` and emit the matching string. Do not write a literal `ctrl/cmd+t` token.
 
 ### Result
 

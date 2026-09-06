@@ -36,6 +36,16 @@ class Query:
     trigger_keyword: str
     command: str
     search: str
+    refinements: dict[str, str]  # selected refinement values
+
+class QueryRefinement:
+    id: str
+    title: str
+    type: QueryRefinementType  # singleSelect | multiSelect | toggle | sort
+    hotkey: str  # cmd+t on macOS, ctrl+t on Windows/Linux
+    options: list[QueryRefinementOption]
+    default_value: list[str] = []
+    persist: bool = False
 
 class Result:
     title: str # Supports "i18n:key" prefix for auto-translation
@@ -54,6 +64,10 @@ class WoxImage:
     @classmethod
     def new_relative(cls, path: str) -> "WoxImage"
 ```
+
+Return refinements on `QueryResponse.refinements`. Read selected values from `query.refinements` on the next query. See `references/refinements.md`.
+
+`hotkey` must be a real platform chord: `cmd+<key>` on macOS and `ctrl+<key>` on Windows/Linux. Detect `sys.platform == "darwin"` and emit the matching string. Do not write a literal `ctrl/cmd+t` token.
 
 ## Public API Methods
 

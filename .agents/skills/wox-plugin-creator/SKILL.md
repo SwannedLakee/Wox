@@ -1,6 +1,6 @@
 ---
 name: wox-plugin-creator
-description: Create, scaffold, implement, and package Wox plugins (nodejs, python, script-nodejs, script-python, singlefile-python, singlefile-nodejs). Use when cloning official SDK templates, generating script or single-file SDK plugin templates, editing plugin.json metadata, defining SettingDefinitions and validators, wiring i18n, implementing plugin APIs, or preparing plugin repositories for local packaging. If the user wants to publish a plugin to the official Wox store or check whether it is already listed, prefer wox-plugin-submit2store.
+description: Create, scaffold, implement, and package Wox plugins (nodejs, python, script-nodejs, script-python, singlefile-python, singlefile-nodejs). Use when cloning official SDK templates, generating script or single-file SDK plugin templates, editing plugin.json metadata, defining SettingDefinitions and validators, wiring i18n, implementing plugin APIs, QueryResponse refinements, refinement hotkeys, or preparing plugin repositories for local packaging. If the user wants to publish a plugin to the official Wox store or check whether it is already listed, prefer wox-plugin-submit2store.
 ---
 
 # Wox Plugin Creator
@@ -40,6 +40,7 @@ Single-file Python is the fastest path to a Python SDK plugin. Node.js first ver
 - For single-file SDK plugins, the scaffold copies templates from `~/.wox/ai/skills/wox-plugin-creator/assets/single_file_plugin_templates/` (or the repo `.agents/skills/wox-plugin-creator/assets/single_file_plugin_templates/` fallback).
 - Prefer standard library features; avoid third-party dependencies unless absolutely necessary. Single-file SDK plugins cannot use pip/npm packages.
 - For SDK usage and API details, read `references/sdk_nodejs.md` or `references/sdk_python.md`.
+- For query-scoped filters or sort controls, return `QueryResponse.Refinements` and read `references/refinements.md` before assigning hotkeys.
 - For `plugin.json`, `SettingDefinitions`, `QueryRequirements`, validators, dynamic settings, and feature flags, read `references/plugin_json_schema.md` first.
 - SDK and single-file SDK plugins must persist and read settings through the Public API setting methods (`GetSetting` / `SaveSetting` / `OnSettingChanged`, or Python `get_setting` / `save_setting` / `on_setting_changed`). These values participate in Wox cloud sync and can follow the user across machines. Do not store plugin settings in local files, custom JSON, or other side storage unless the value is truly machine-local and cannot live in settings.
 
@@ -54,6 +55,7 @@ If a plugin needs to cache anything on disk, put it under the Wox plugin cache f
 - When authoring `SettingDefinitions`, always decide whether each setting is platform-specific before shipping it. Wox cloud sync replicates normal plugin settings across devices, so local paths, executable paths, shell commands, hotkeys, system integrations, browser profiles, and application paths should usually set `IsPlatformSpecific: true`. Account IDs, API keys, remote service hosts, and cross-platform user preferences should usually keep `IsPlatformSpecific: false`.
 - Use `DisabledInPlatforms` only to disable a setting on selected platforms. It does not isolate stored values; use `IsPlatformSpecific` when the value must differ per platform after cloud sync.
 - When a plugin cannot run a query without required settings such as access keys, declare those requirements in metadata `QueryRequirements` instead of returning ad hoc setup results from `query()`.
+- Query refinements (type filters, sort modes, and similar query-scoped chips) belong on `QueryResponse.Refinements`, not in command syntax. Every refinement `Hotkey` must use the platform primary modifier: `cmd+<key>` on macOS and `ctrl+<key>` on Windows/Linux (for example `cmd+t` / `ctrl+t`). Detect the OS at runtime and emit the matching string.
 - For ready-to-copy patterns such as validated textbox/select fields, editable tables, AI model selectors, and dynamic preview settings, read `references/settings_patterns.md`.
 - For Python settings APIs, note that helper builders are limited; advanced settings are often created by constructing `PluginSettingDefinitionItem` and value objects directly.
 
@@ -83,5 +85,5 @@ Do not target older interpreters. Script plugins still use the user's system Pyt
 ## Resources
 
 - scripts: `scripts/scaffold_wox_plugin.py`, `scripts/search_iconify.py`
-- references: `references/plugin_overview.md`, `references/scaffold_nodejs.md`, `references/scaffold_python.md`, `references/sdk_nodejs.md`, `references/sdk_python.md`, `references/plugin_json_schema.md`, `references/settings_patterns.md`, `references/plugin_i18n.md`, `references/icons.md`
+- references: `references/plugin_overview.md`, `references/scaffold_nodejs.md`, `references/scaffold_python.md`, `references/sdk_nodejs.md`, `references/sdk_python.md`, `references/plugin_json_schema.md`, `references/settings_patterns.md`, `references/plugin_i18n.md`, `references/icons.md`, `references/refinements.md`
 - assets: `assets/script_plugin_templates/`, `assets/single_file_plugin_templates/`, `assets/iconify/`

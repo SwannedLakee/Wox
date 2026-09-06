@@ -1978,7 +1978,9 @@ func (w *platformWindow) executeCommand(command windowCommand) windowCommandResu
 		w.nativeFilePreview = nil
 		return windowCommandResult{err: err}
 	case windowCommandTrimRenderer:
-		if w.focus.visible || w.renderer == nil {
+		// Cached WebViews retain the native renderer and its composition visuals while hidden.
+		// Destroying it here leaves their raw renderer pointer dangling on the next Show.
+		if w.focus.visible || w.renderer == nil || w.webView != nil {
 			return windowCommandResult{}
 		}
 		return windowCommandResult{err: w.renderer.trim()}

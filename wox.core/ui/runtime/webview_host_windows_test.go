@@ -3,12 +3,52 @@
 package woxui
 
 import (
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/lxn/win"
 
 	webviewruntime "wox/ui/runtime/internal/webview"
 )
+
+// TestWebViewRetainsHiddenRenderer exercises trimming with a real native renderer and cached controller.
+func TestWebViewRetainsHiddenRenderer(t *testing.T) {
+	if os.Getenv("WOX_WINDOWS_WEBVIEW_TRIM_INTEGRATION") != "1" {
+		t.Skip("set WOX_WINDOWS_WEBVIEW_TRIM_INTEGRATION=1 to run the native renderer lifetime test")
+	}
+	err := Run(func() error {
+		window, err := Open(WindowOptions{Title: "Wox WebView renderer lifetime test", Size: Size{Width: 320, Height: 240}})
+		if err != nil {
+			return err
+		}
+		defer window.Close()
+		native := window.native
+		original := native.renderer.handle
+		if original == nil || native.focus.visible {
+			return fmt.Errorf("expected an initialized hidden renderer")
+		}
+		native.webView = webviewruntime.New(&webViewNavigationDriver{})
+		if result := native.executeCommand(windowCommand{kind: windowCommandTrimRenderer}); result.err != nil {
+			return result.err
+		}
+		if native.renderer.handle != original {
+			return fmt.Errorf("trim destroyed the renderer retained by a cached WebView")
+		}
+		native.webView.Close()
+		native.webView = nil
+		if result := native.executeCommand(windowCommand{kind: windowCommandTrimRenderer}); result.err != nil {
+			return result.err
+		}
+		if native.renderer.handle != nil {
+			return fmt.Errorf("trim retained the renderer after the WebView was released")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 
 type webViewNavigationDriver struct {
 	backCalls    int

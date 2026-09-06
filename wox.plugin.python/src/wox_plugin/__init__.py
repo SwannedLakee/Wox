@@ -247,6 +247,7 @@ from .models.query import (
     Selection,
     SelectionType,
 )
+from .models.query_hint import QueryElement, QueryHint
 from .models.query_response import (
     QueryGridLayout,
     QueryLayout,
@@ -306,6 +307,8 @@ __all__: List[str] = [
     # Models
     "Context",
     "Query",
+    "QueryElement",
+    "QueryHint",
     "QueryResponse",
     "QueryRefinement",
     "QueryRefinementOption",
@@ -457,8 +460,3 @@ class APIError(WoxPluginError):
     """Raised when an API call fails."""
 
     pass
-
-
-from .models.query_hint import QueryElement, QueryHint
-
-__all__ += ["QueryElement", "QueryHint"]

@@ -323,7 +323,7 @@ func (a *App) saveRecordedHotkeySetting(state *hotkeyRecordingState, key, value,
 	})
 }
 
-// onHotkeyRecordingKey provides the normal-combo fallback when a raw recorder is unavailable.
+// onHotkeyRecordingKey supplements raw recording with local normal-combo candidates.
 func (a *App) onHotkeyRecordingKey(event woxui.KeyEvent) bool {
 	state := a.hotkeySettings.Recording()
 	if state == nil {
@@ -341,7 +341,7 @@ func (a *App) onHotkeyRecordingKey(event woxui.KeyEvent) bool {
 		a.stopHotkeyRecording()
 		return true
 	}
-	if !state.ready || state.raw || !state.fallback || state.checking {
+	if !state.ready || !state.fallback || state.checking {
 		return true
 	}
 	hotkey := fallbackHotkeyString(event)

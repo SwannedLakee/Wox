@@ -7,6 +7,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <unistd.h>
 
 extern void keyboardHotkeyTriggeredCGO(int id);
 extern int keyboardHookEventCGO(int eventKind, unsigned int keyCode, unsigned int modifiers, unsigned int character, int nativeEventType, unsigned long long nativeFlags, int nativeCapsLockStateAvailable, int nativeCapsLockPressed);
@@ -25,19 +26,44 @@ static unsigned long long gRawTimeoutCount, gRawDisabledCount, gRawConversionFai
 // Called on the main thread, alongside the event tap callback.
 char *woxDarwinKeyboardDiagnostics(void) {
     @autoreleasepool {
-        char *buffer = calloc(1024, 1);
+        char *buffer = calloc(4096, 1);
         if (!buffer) {
             return NULL;
         }
         TISInputSourceRef source = TISCopyCurrentKeyboardInputSource();
         NSString *sourceID = source ? (__bridge NSString *)TISGetInputSourceProperty(source, kTISPropertyInputSourceID) : nil;
-        snprintf(buffer, 1024,
+        snprintf(buffer, 4096,
                  "secureInput=%d accessibility=%d listenAccess=%d tapExists=%d tapEnabled=%d physicalMonitor=%d appActive=%d frontPid=%d frontApp=%s inputSource=%s down=%llu up=%llu flags=%llu timeouts=%llu disabled=%llu conversionFailures=%llu",
                  IsSecureEventInputEnabled(), AXIsProcessTrusted(), CGPreflightListenEventAccess(),
                  gRawKeyboardEventTap != NULL, gRawKeyboardEventTap && CGEventTapIsEnabled(gRawKeyboardEventTap),
                  gPhysicalKeyboardManagerReady, NSApp.active, NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier,
                  NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier.UTF8String ?: "unknown", sourceID.UTF8String ?: "unknown",
                  gRawDownCount, gRawUpCount, gRawFlagsCount, gRawTimeoutCount, gRawDisabledCount, gRawConversionFailureCount);
+        // Report every tap owned by this process; a successful creation can still
+        // have unauthorized event types removed from its requested mask.
+        CGEventTapInformation taps[128];
+        uint32_t tapCount = 0;
+        CGError tapListError = CGGetEventTapList(128, taps, &tapCount);
+        size_t used = strlen(buffer);
+        snprintf(buffer + used, 4096 - used, " tapListError=%d tapListCount=%u tapListAtCapacity=%d requestedKeyboardMask=0x%llx processTaps=[",
+                 tapListError, tapCount, tapCount >= 128,
+                 (unsigned long long)(CGEventMaskBit(kCGEventKeyDown) | CGEventMaskBit(kCGEventKeyUp) | CGEventMaskBit(kCGEventFlagsChanged)));
+        if (tapListError == kCGErrorSuccess) {
+            for (uint32_t index = 0; index < tapCount && index < 128; index++) {
+                CGEventTapInformation tap = taps[index];
+                if (tap.tappingProcess != getpid()) continue;
+                used = strlen(buffer);
+                snprintf(buffer + used, 4096 - used,
+                         "{id=%u point=%u options=%u targetPid=%d enabled=%d mask=0x%llx keyDown=%d keyUp=%d flagsChanged=%d}",
+                         tap.eventTapID, (unsigned int)tap.tapPoint, (unsigned int)tap.options, tap.processBeingTapped, tap.enabled,
+                         (unsigned long long)tap.eventsOfInterest,
+                         !!(tap.eventsOfInterest & CGEventMaskBit(kCGEventKeyDown)),
+                         !!(tap.eventsOfInterest & CGEventMaskBit(kCGEventKeyUp)),
+                         !!(tap.eventsOfInterest & CGEventMaskBit(kCGEventFlagsChanged)));
+            }
+        }
+        used = strlen(buffer);
+        snprintf(buffer + used, 4096 - used, "]");
         if (source) {
             CFRelease(source);
         }

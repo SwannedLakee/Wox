@@ -1,7 +1,10 @@
 package launcher
 
 import (
+	"context"
 	"testing"
+	"time"
+	"wox/ui/contract"
 
 	woxui "wox/ui/runtime"
 )
@@ -68,5 +71,38 @@ func TestFallbackHotkeyStringAllowsStandaloneFunctionKeys(t *testing.T) {
 	}
 	if got := fallbackHotkeyString(woxui.KeyEvent{Key: woxui.Key("a"), Down: true}); got != "" {
 		t.Fatalf("standalone letter = %q, want empty", got)
+	}
+}
+
+// localHotkeyTestServices observes candidates without starting native windows.
+type localHotkeyTestServices struct {
+	contract.Services
+	candidates chan string
+}
+
+func (s *localHotkeyTestServices) SubmitHotkeyRecordingCandidate(_ context.Context, _ string, hotkey string) error {
+	s.candidates <- hotkey
+	return nil
+}
+
+// TestHotkeyLocalFallbackWithRawAvailable reproduces the UI state of a partially
+// functioning event tap and ensures the local candidate still reaches core.
+func TestHotkeyLocalFallbackWithRawAvailable(t *testing.T) {
+	services := &localHotkeyTestServices{candidates: make(chan string, 1)}
+	controller := newHotkeySettingsController(CommonDeps{})
+	controller.SetRecording(&hotkeyRecordingState{
+		ready: true, raw: true, fallback: true, diagnosticCtx: context.Background(),
+	})
+	app := &App{hotkeySettings: controller, services: services, lifecycleCtx: context.Background()}
+	if !app.onHotkeyRecordingKey(woxui.KeyEvent{Key: woxui.Key("a"), Down: true, Modifiers: woxui.KeyModifierControl}) {
+		t.Fatal("recording did not consume the local key")
+	}
+	select {
+	case candidate := <-services.candidates:
+		if candidate != "ctrl+a" {
+			t.Fatalf("unexpected candidate: %s", candidate)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("raw availability disabled local fallback")
 	}
 }

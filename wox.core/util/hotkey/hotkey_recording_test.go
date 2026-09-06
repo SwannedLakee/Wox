@@ -232,3 +232,37 @@ func assertNoRecordedHotkey(t *testing.T, ch <-chan recordedHotkey, label string
 	case <-time.After(recordingModifierChordDebounce + 80*time.Millisecond):
 	}
 }
+
+// TestRecordingSessionSupplementsModifierOnlyDelivery covers a successful raw
+// subscription that never delivers the ordinary key of a normal combination.
+func TestRecordingSessionSupplementsModifierOnlyDelivery(t *testing.T) {
+	var rawHandler keyboard.RawKeyHandler
+	restore := replaceRawKeyListenerForTest(t, func(handler keyboard.RawKeyHandler) (keyboard.RawKeySubscription, error) {
+		rawHandler = handler
+		return noopRawKeySubscription{}, nil
+	})
+	defer restore()
+	var recorded []recordedHotkey
+	manager := newHotkeyRecordingSessionManager()
+	capability, err := manager.Start(recordingSessionOptions{
+		allowedKinds: []hotkeyKind{hotkeyKindNormalCombo, hotkeyKindDoubleModifier},
+		onRecorded:   func(result recordedHotkey) { recorded = append(recorded, result) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Stop()
+	if !capability.RawRecorderAvailable || len(capability.FallbackAllowedKinds) != 1 || capability.FallbackAllowedKinds[0] != hotkeyKindNormalCombo {
+		t.Fatalf("partial raw delivery must retain normal fallback: %+v", capability)
+	}
+	rawHandler(keyboard.RawKeyEvent{Type: keyboard.EventTypeKeyDown, Key: keyboard.KeyLeftCtrl})
+	if err := manager.SubmitFallbackCandidate("ctrl+a"); err != nil {
+		t.Fatal(err)
+	}
+	if len(recorded) != 1 || recorded[0].Hotkey != "ctrl+a" || recorded[0].Kind != hotkeyKindNormalCombo {
+		t.Fatalf("local combo was not recorded: %+v", recorded)
+	}
+	if err := manager.SubmitFallbackCandidate("ctrl+ctrl"); err == nil {
+		t.Fatal("local fallback must not record double modifiers")
+	}
+}

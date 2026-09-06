@@ -180,7 +180,9 @@ func (m *hotkeyRecordingSessionManager) Start(options recordingSessionOptions) (
 
 	m.listener = listener
 	m.state = state
-	return hotkeyRecordingCapability{RawRecorderAvailable: true}, nil
+	// A registered tap may deliver modifiers but no ordinary keys. Keep local
+	// normal-combo candidates available even when raw subscription succeeds.
+	return hotkeyRecordingCapability{RawRecorderAvailable: true, FallbackAllowedKinds: recordingFallbackKinds(allowed)}, nil
 }
 
 func (m *hotkeyRecordingSessionManager) Stop() {

@@ -316,7 +316,7 @@ func launcherQueryEditable(widget woxwidget.Widget) woxwidget.EditableText {
 	return scroll.Child.(woxwidget.EditableText)
 }
 
-func TestQueryTextBaselineSurvivesStructuredFocusTransition(t *testing.T) {
+func TestQueryTextBaselineSurvivesQueryHintFocusTransition(t *testing.T) {
 	for _, scale := range []float32{1, 1.25, 2} {
 		props := LauncherQueryProps{Width: 240 * scale, Height: 42 * scale, LineHeight: 38 * scale, CaretHeight: 34 * scale,
 			Style: woxui.TextStyle{Size: 28 * scale}, State: woxui.TextEditingState{Text: "set volume "},

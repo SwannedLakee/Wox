@@ -38,7 +38,7 @@ const (
 
 // App owns one launcher window and its typed core service boundary.
 type App struct {
-	structured structuredQueryEditor
+	queryHintEditorState queryHintEditor
 	// These narrow locks protect the few resources intentionally accessed outside the UI thread.
 	translationsMu         sync.RWMutex
 	terminalSubscriptionMu sync.Mutex
@@ -806,7 +806,7 @@ func (a *App) setQuery(query plainQuery) {
 	if query.QueryType == "" {
 		query.QueryType = "input"
 	}
-	a.structured = structuredQueryEditor{}
+	a.queryHintEditorState = queryHintEditor{}
 	query.QueryHint = query.QueryHint.Clone()
 	query.QueryHint = query.QueryHint.NormalizeForQuery(query.QueryType, query.QueryText)
 	a.query = query
@@ -814,7 +814,7 @@ func (a *App) setQuery(query plainQuery) {
 	a.queryContextKnown = false
 	a.editor.SetText(query.QueryText, false)
 	if query.QueryHint != nil {
-		a.installStructuredQuery(query.QueryHint)
+		a.installQueryHint(query.QueryHint)
 	}
 	a.resetQueryTransitionLocked()
 	a.resetQueryLoadingLocked()
@@ -855,7 +855,7 @@ func (a *App) sendCurrentQuery() error {
 		query = a.query
 		query.QueryHint = a.query.QueryHint.Clone()
 		startPage = a.show.StartPage
-		skipCompletionHint = a.query.QueryHint != nil || a.structured.candidate != nil || !a.generalSettings.Data().EnableQueryCompletionHint
+		skipCompletionHint = a.query.QueryHint != nil || a.queryHintEditorState.candidate != nil || !a.generalSettings.Data().EnableQueryCompletionHint
 		preserveQuery = a.shouldPreserveQueryOnShowLocked()
 		a.startQueryLoadingLocked()
 	}); err != nil {
@@ -1402,7 +1402,7 @@ func (a *App) onKey(event woxui.KeyEvent) bool {
 	if a.onToolbarKey(event) {
 		return true
 	}
-	if a.onStructuredQueryKey(event) {
+	if a.onQueryHintKey(event) {
 		return true
 	}
 	if event.Key == woxui.KeyTab {
@@ -1438,7 +1438,7 @@ func (a *App) onKey(event woxui.KeyEvent) bool {
 	if event.Down && !event.Composing && event.Modifiers.HasPrimary() && (event.Key == woxui.Key("c") || event.Key == woxui.Key("x") || event.Key == woxui.Key("v")) {
 		switch event.Key {
 		case woxui.Key("c"):
-			if a.structured.allSelected {
+			if a.queryHintEditorState.allSelected {
 				_ = clipboard.WriteText(a.query.QueryText)
 				return true
 			}
@@ -1447,9 +1447,9 @@ func (a *App) onKey(event woxui.KeyEvent) bool {
 			}
 			return true
 		case woxui.Key("x"):
-			if a.structured.allSelected {
+			if a.queryHintEditorState.allSelected {
 				if clipboard.WriteText(a.query.QueryText) == nil {
-					a.replaceWholeStructuredQuery("")
+					a.replaceWholeQueryHint("")
 				}
 				return true
 			}
@@ -1473,8 +1473,8 @@ func (a *App) onKey(event woxui.KeyEvent) bool {
 			if err != nil || text == "" {
 				return true
 			}
-			if a.structured.allSelected {
-				a.replaceWholeStructuredQuery(normalizeQueryNewlines(text))
+			if a.queryHintEditorState.allSelected {
+				a.replaceWholeQueryHint(normalizeQueryNewlines(text))
 				return true
 			}
 			previousText := a.editor.State().Text
@@ -1637,8 +1637,8 @@ func (a *App) onTextInput(event woxui.TextInputEvent) {
 	if event.Kind == woxui.TextInputCommit {
 		event.Text = normalizeQueryNewlines(event.Text)
 	}
-	if a.structured.allSelected && event.Kind == woxui.TextInputCommit {
-		a.replaceWholeStructuredQuery(event.Text)
+	if a.queryHintEditorState.allSelected && event.Kind == woxui.TextInputCommit {
+		a.replaceWholeQueryHint(event.Text)
 		return
 	}
 	a.selectTouchedQueryBlocks()

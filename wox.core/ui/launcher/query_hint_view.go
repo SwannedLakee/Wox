@@ -7,9 +7,9 @@ import (
 	woxwidget "wox/ui/widget"
 )
 
-// structuredQueryView decorates the ordinary editor without introducing separate
+// queryHintView decorates the ordinary editor without introducing separate
 // hit targets, padding, or text layout. Selection and IME retain one coordinate space.
-func (a *App) structuredQueryView(snapshot viewSnapshot, width, height, lineHeight float32) woxwidget.Widget {
+func (a *App) queryHintView(snapshot viewSnapshot, width, height, lineHeight float32) woxwidget.Widget {
 	snapshot.completionHint = nil
 	props := a.queryViewProps(snapshot, width, height, lineHeight)
 	measure := func(text string) float32 {
@@ -20,7 +20,7 @@ func (a *App) structuredQueryView(snapshot viewSnapshot, width, height, lineHeig
 	if props.State.Composition == "" {
 		offset := 0
 		text := []rune(props.State.Text)
-		for _, element := range snapshot.structure.Elements {
+		for _, element := range snapshot.hint.Elements {
 			start, end := offset, offset+len([]rune(element.Content()))
 			offset = end
 			if element.Kind == common.QueryElementText {
@@ -30,13 +30,13 @@ func (a *App) structuredQueryView(snapshot viewSnapshot, width, height, lineHeig
 			if start == end {
 				if props.CompletionSuffix == "" && end == len(text) {
 					hints := []string{}
-					for _, e := range snapshot.structure.Elements {
+					for _, e := range snapshot.hint.Elements {
 						if e.Kind == common.QueryElementArgument && e.Value == "" {
 							hints = append(hints, string(e.Placeholder))
 						}
 					}
 					props.CompletionSuffix = strings.Join(hints, "   ")
-					if snapshot.structureCandidate {
+					if snapshot.queryHintCandidate {
 						props.CompletionSuffix = " " + props.CompletionSuffix
 					}
 					props.TextWidth += measure(props.CompletionSuffix)

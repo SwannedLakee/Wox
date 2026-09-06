@@ -114,7 +114,7 @@ type LauncherHeaderProps struct {
 	QueryRadius       float32
 	AppPadding        woxwidget.Insets
 	Theme             woxcomponent.Theme
-	StructuredQuery   woxwidget.Widget
+	QueryHint         woxwidget.Widget
 	Query             LauncherQueryProps
 	Refinement        woxwidget.Widget
 	RefinementWidth   float32
@@ -158,7 +158,7 @@ func (p launcherQueryLoadingProps) Equal(other launcherQueryLoadingProps) bool {
 func LauncherHeaderView(props LauncherHeaderProps) woxwidget.Widget {
 	queryLeftPadding := scaledLauncherSize(8, props.DensityScale)
 	accessoryGap := scaledLauncherSize(12, props.DensityScale)
-	query := props.StructuredQuery
+	query := props.QueryHint
 	if query == nil {
 		query = LauncherQueryBoundary(props.Query)
 	}
@@ -353,7 +353,7 @@ func launcherQueryEditor(props LauncherQueryProps) woxwidget.Widget {
 	return editor
 }
 
-// LauncherQueryLabel paints unfocused structured elements with the same baseline as editable query text.
+// LauncherQueryLabel paints unfocused query hint elements with the same baseline as editable query text.
 func LauncherQueryLabel(props LauncherQueryProps) woxwidget.Widget {
 	props.Focused = false
 	return launcherQueryPainter(props)

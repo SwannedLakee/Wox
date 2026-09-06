@@ -39,3 +39,35 @@ func TestQueryHintRoundTripAndIsolation(t *testing.T) {
 		t.Fatal("unknown kind accepted")
 	}
 }
+
+func TestQueryHintCannotReplaceQueryContent(t *testing.T) {
+	hint := &QueryHint{Elements: []QueryElement{{Id: "command", Kind: QueryElementText, Text: "gh issues "}, {Id: "issue", Kind: QueryElementBlock, Value: "owner/repo#6"}}}
+	for _, text := range []string{"", "issues owner/repo#6", "other query"} {
+		if normalized := hint.NormalizeForQuery("input", text); normalized != nil {
+			t.Fatalf("hint substituted missing or different text %q", text)
+		}
+	}
+	if normalized := hint.NormalizeForQuery("input", "gh issues owner/repo#6"); normalized != hint {
+		t.Fatal("matching hint was discarded")
+	}
+	if hint.NormalizeForQuery("selection", hint.PlainText()) != nil {
+		t.Fatal("selection accepted input decoration")
+	}
+	var absent *QueryHint
+	if normalized := absent.NormalizeForQuery("input", ""); normalized != nil {
+		t.Fatal("ordinary query clearing requires no hint")
+	}
+}
+
+// Invalid decoration must not escape normalization even when its text matches.
+func TestInvalidQueryHintIsIgnored(t *testing.T) {
+	for _, hint := range []*QueryHint{
+		{},
+		{Elements: []QueryElement{{Id: "value", Kind: "unknown", Value: "hello"}}},
+		{Elements: []QueryElement{{Id: "same", Kind: QueryElementText, Text: "hello"}, {Id: "same", Kind: QueryElementText}}},
+	} {
+		if hint.NormalizeForQuery("input", hint.PlainText()) != nil {
+			t.Fatal("invalid hint was retained")
+		}
+	}
+}

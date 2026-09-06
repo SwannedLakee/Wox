@@ -374,8 +374,8 @@ func (w *WebsocketHost) handleRequestFromPlugin(ctx context.Context, request Jso
 		w.sendResponseToHost(ctx, request, result)
 	case "ChangeQuery":
 		queryType, exist := request.Params["queryType"]
-		if !exist {
-			util.GetLogger().Error(ctx, fmt.Sprintf("[%s] ChangeQuery method must have a queryType parameter", request.PluginName))
+		if !exist || (queryType != plugin.QueryTypeInput && queryType != plugin.QueryTypeSelection) {
+			w.sendResponseErrToHost(ctx, request, fmt.Errorf("ChangeQuery requires queryType input or selection"))
 			return
 		}
 
@@ -384,16 +384,13 @@ func (w *WebsocketHost) handleRequestFromPlugin(ctx context.Context, request Jso
 			var structure *common.QueryHint
 			if raw := request.Params["queryHint"]; raw != "" && raw != "null" {
 				if err := json.Unmarshal([]byte(raw), &structure); err != nil {
-					w.sendResponseErrToHost(ctx, request, err)
-					return
+					// Optional decoration must never reject an otherwise valid query.
+					structure = nil
 				}
-				if err := structure.Validate(); err != nil {
-					w.sendResponseErrToHost(ctx, request, err)
-					return
-				}
+				structure = structure.NormalizeForQuery(queryType, queryText)
 			}
-			if !queryTextExist && structure == nil {
-				util.GetLogger().Error(ctx, fmt.Sprintf("[%s] ChangeQuery method must have a queryText parameter", request.PluginName))
+			if !queryTextExist {
+				w.sendResponseErrToHost(ctx, request, fmt.Errorf("ChangeQuery input requires queryText, even when queryHint is supplied"))
 				return
 			}
 			pluginInstance.API.ChangeQuery(ctx, common.PlainQuery{
@@ -405,8 +402,8 @@ func (w *WebsocketHost) handleRequestFromPlugin(ctx context.Context, request Jso
 		}
 		if queryType == plugin.QueryTypeSelection {
 			querySelection, querySelectionExist := request.Params["querySelection"]
-			if !querySelectionExist {
-				util.GetLogger().Error(ctx, fmt.Sprintf("[%s] ChangeQuery method must have a querySelection parameter", request.PluginName))
+			if !querySelectionExist || querySelection == "null" || querySelection == "" {
+				w.sendResponseErrToHost(ctx, request, fmt.Errorf("ChangeQuery selection requires querySelection"))
 				return
 			}
 

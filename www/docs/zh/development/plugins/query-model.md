@@ -11,7 +11,7 @@ Wox 会把用户的每次输入或选择整理为一个 `Query` 对象发送给�
 
 | 字段 | 说明 |
 | --- | --- |
-| `RawQuery` | 用户原始输入，或 `QueryHint` 的纯文本表示，包含触发关键字。 |
+| `RawQuery` | 完整查询文字，按原有规则解析，包含触发关键字；Hint 不覆盖此内容。 |
 | `QueryHint` | `input` 查询可选的有序元素列表，见下文结构化查询。 |
 | `TriggerKeyword` | `plugin.json` 中声明的关键字之一。`"*"` 表示全局触发，空值代表全局查询（注册了 `*` 时）。 |
 | `Command` | 触发关键字后的命令段，来源于 `plugin.json` 的 `Commands`。 |
@@ -109,16 +109,25 @@ Node.js 使用 `query.QueryHint.Elements`，Python 使用
 
 Wox 会继续提供 `RawQuery`、`Command`、`Search`：按顺序连接元素的真实内容，
 不包含占位符。需要空格时显式加入 `text` 分隔元素。这种文本表示会丢失参数边界，
-不要通过拆分它来重建结构。插件路由身份由 Wox 管理，插件不要自行填写。
+不要通过拆分它来重建结构。Hint 不携带插件身份、不强制路由，也不隐式创建 Scope。
+查询仍按原有文字和显式 `QueryScope` 路由。完整实例需要包含适用的触发词（例如 `gh issues `），
+Wox 不会根据 `ChangeQuery` 的调用插件推断或补充触发词。
 
 ### 插件主动打开完整实例
 
 `ChangeQuery` 与模板不同，需要包含命令前缀。以下代码放在结果动作中，
 `api` / `self.api` 和 `ctx` 来自插件现有上下文。
 
+`ChangeQuery` 必须传入 `QueryType`，并按类型提供完整的 `QueryText`（input）或
+`QuerySelection`（selection），即使携带 Hint 也不能省略。`QueryHint` 只是可选的视觉优化，
+不能替代、生成或覆盖查询内容。输入 Hint 必须与完整 `QueryText` 一致，包含触发词、命令、
+分隔符和参数；Hint 格式非法或与查询不一致时忽略 Hint，以 `QueryText` 为准继续查询。去掉 Hint 后，查询文本与路由必须保持相同。
+显式传入 `QueryText: ""` 仍可清空输入。
+
 ```typescript
 await api.ChangeQuery(ctx, {
   QueryType: "input",
+  QueryText: "set volume 50",
   QueryHint: {
     Elements: [
       { Id: "command", Kind: "text", Text: "set volume " },
@@ -133,6 +142,7 @@ from wox_plugin import ChangeQueryParam, QueryElement, QueryHint, QueryType
 
 await self.api.change_query(ctx, ChangeQueryParam(
     query_type=QueryType.INPUT,
+    query_text="set volume 50",
     query_hint=QueryHint(elements=[
         QueryElement(id="command", kind="text", text="set volume "),
         QueryElement(id="volume", kind="argument", value="50",
@@ -152,7 +162,7 @@ await self.api.change_query(ctx, ChangeQueryParam(
 - 保留正常逐字、逐词删除和跨元素选择。跨边界编辑保留用户文字，撤掉无法可靠对应的结构。
 - 重新显示并全选时选中整个查询，直接输入会替换命令和所有参数。撤销和历史保留结构，block 仍按整体操作。
 - 整段粘贴带参数的命令保持普通文本，不自动解析；参数范围内粘贴会更新该参数值。
-- 没有 `QueryHint` 的查询保持原有行为；`ChangeQuery` 同时提供结构和文字时，以结构为准。
+- 没有 `QueryHint` 的查询保持原有行为；`ChangeQuery` 的查询内容始终以显式的 `QueryText` / `QuerySelection` 为准。
 
 接入时覆盖空值、合法/非法值、多槽位焦点、重新显示后的整体替换、撤销和旧文本路径。
 Set Volume 是首个内置接入示例，音量范围规则由该插件负责，不是通用查询协议的一部分。

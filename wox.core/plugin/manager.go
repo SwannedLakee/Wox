@@ -4299,15 +4299,8 @@ func (m *Manager) getQueryFirstFlushDeadlineMs(jobs []queryPluginJob, planElapse
 }
 
 func (m *Manager) NewQuery(ctx context.Context, plainQuery common.PlainQuery) (Query, *Instance, error) {
-	if plainQuery.QueryHint != nil && plainQuery.QueryType != QueryTypeInput {
-		return Query{}, nil, fmt.Errorf("query hint requires input query")
-	}
-	if err := plainQuery.QueryHint.Validate(); err != nil {
-		return Query{}, nil, err
-	}
-	if plainQuery.QueryHint != nil {
-		plainQuery.QueryText = plainQuery.QueryHint.PlainText()
-	}
+
+	plainQuery.QueryHint = plainQuery.QueryHint.NormalizeForQuery(plainQuery.QueryType, plainQuery.QueryText)
 	refinements := plainQuery.QueryRefinements
 	if refinements == nil {
 		// Query refinements are optional in older UI requests. Normalize nil to
@@ -4372,13 +4365,6 @@ func (m *Manager) NewQuery(ctx context.Context, plainQuery common.PlainQuery) (Q
 			}
 		}
 		query, instance := newQueryInputWithPlugins(newQuery, GetPluginManager().GetPluginInstances())
-		if structure := plainQuery.QueryHint; structure != nil && structure.PluginId != "" {
-			instance = m.getPluginInstance(structure.PluginId)
-			if instance == nil {
-				return Query{}, nil, fmt.Errorf("structured query plugin is unavailable")
-			}
-			query.Scope = common.QueryScope{Plugins: []common.QueryScopePlugin{{PluginID: structure.PluginId, Command: query.Command}}}
-		}
 		query.Id = plainQuery.QueryId
 		query.SessionId = util.GetContextSessionId(ctx)
 		query.Refinements = refinements

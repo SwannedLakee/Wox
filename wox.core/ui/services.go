@@ -280,9 +280,3 @@ func uiServiceContext(ctx context.Context, sessionID string) context.Context {
 func (s *CoreServices) ResolveQueryHint(ctx context.Context, text string) *common.QueryHint {
 	return plugin.GetPluginManager().ResolveQueryHint(ctx, text)
 }
-
-// QueryHintAvailable lets history restore fall back to text after plugin removal or disabling.
-func (s *CoreServices) QueryHintAvailable(pluginID string) bool {
-	instance := plugin.GetPluginManager().GetPluginInstanceById(pluginID)
-	return instance != nil && instance.Setting != nil && !instance.Setting.Disabled.Get()
-}

@@ -808,17 +808,7 @@ func (a *App) setQuery(query plainQuery) {
 	}
 	a.structured = structuredQueryEditor{}
 	query.QueryHint = query.QueryHint.Clone()
-	if query.QueryHint != nil {
-		if err := query.QueryHint.Validate(); err != nil {
-			query.QueryHint = nil
-		} else if available, ok := a.services.(interface{ QueryHintAvailable(string) bool }); ok && query.QueryHint.PluginId != "" && !available.QueryHintAvailable(query.QueryHint.PluginId) {
-			query.QueryText = query.QueryHint.PlainText()
-			query.QueryHint = nil
-		}
-	}
-	if query.QueryHint != nil {
-		query.QueryText = query.QueryHint.PlainText()
-	}
+	query.QueryHint = query.QueryHint.NormalizeForQuery(query.QueryType, query.QueryText)
 	a.query = query
 	a.queryContext = queryContext{}
 	a.queryContextKnown = false

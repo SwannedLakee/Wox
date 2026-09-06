@@ -1271,34 +1271,13 @@ export interface PluginInitParams {
  * })
  * ```
  */
-export interface ChangeQueryParam {
-  /** When supplied, structure is authoritative and QueryText is derived by Wox. */
-  QueryHint?: QueryHint
-  /**
-   * The type of query to change to.
-   *
-   * - `input`: Change to a text input query
-   * - `selection`: Change to a selection-based query
-   */
-  QueryType: "input" | "selection"
-  /**
-   * New query text (for input queries).
-   *
-   * Only used when QueryType is "input".
-   */
-  QueryText?: string
-  /**
-   * New selection data (for selection queries).
-   *
-   * Only used when QueryType is "selection".
-   */
-  QuerySelection?: Selection
-
-  /**
-   * Hidden query-scoped data to attach to the changed query.
-   */
+/** The complete query is required; QueryHint only decorates input text; invalid or mismatching hints are ignored. */
+export type ChangeQueryParam = {
   ContextData?: MapString
-}
+} & (
+  | { QueryType: "input"; QueryText: string; QueryHint?: QueryHint; QuerySelection?: never }
+  | { QueryType: "selection"; QuerySelection: Selection; QueryText?: string; QueryHint?: never }
+)
 
 export interface RefreshQueryParam {
   /**

@@ -79,6 +79,9 @@ export class PluginAPI implements PublicAPI {
   }
 
   async ChangeQuery(ctx: Context, query: ChangeQueryParam): Promise<void> {
+    if (query.QueryType !== "input" && query.QueryType !== "selection") throw new Error("ChangeQuery requires QueryType")
+    if (query.QueryType === "input" && typeof query.QueryText !== "string") throw new Error("ChangeQuery input requires complete QueryText")
+    if (query.QueryType === "selection" && !query.QuerySelection) throw new Error("ChangeQuery selection requires QuerySelection")
     await this.invokeMethod(ctx, "ChangeQuery", {
       queryType: query.QueryType,
       queryHint: JSON.stringify(query.QueryHint ?? null),

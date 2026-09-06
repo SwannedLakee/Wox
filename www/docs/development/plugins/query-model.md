@@ -131,19 +131,27 @@ else:
     value = query.search  # Feed this through the existing legacy parser.
 ```
 
-Wox also supplies `RawQuery`, `Command`, and `Search` using a plain-text projection.
-It concatenates actual element content, including explicit text separators, and
-excludes placeholders. This projection loses parameter boundaries; never use it
-to reconstruct the structure. Wox owns the plugin routing identity; do not set it.
+Wox derives `RawQuery`, `Command`, and `Search` from the explicit query text through
+the ordinary query parser. Hint content must match that text, excluding placeholders.
+Text alone does not preserve parameter boundaries; never use it to reconstruct hints. Hints never carry plugin identity, force routing or create a scope. Routing follows
+the ordinary query text and explicit `QueryScope`. Include the trigger keyword in
+a complete instance when needed, for example `gh issues `; Wox does not infer it
+from the plugin that called `ChangeQuery`.
 
 ### Open a complete instance
 
-Unlike a command template, `ChangeQuery` must include the complete command prefix.
+`ChangeQuery` always requires `QueryType` and complete `QueryText` (input) or
+`QuerySelection` (selection), even when a hint is supplied. `QueryHint` is only an
+optional visual enhancement, never the source of query content. Input hint elements
+must match the complete `QueryText`, including trigger keyword and command prefix;
+invalid or inconsistent hints are ignored and `QueryText` is used unchanged. Removing the hint must leave the same query text
+and routing. Use an explicit empty `QueryText` to clear the input.
 Node.js, inside a result action with `api` and `ctx` available:
 
 ```typescript
 await api.ChangeQuery(ctx, {
   QueryType: "input",
+  QueryText: "set volume 50",
   QueryHint: {
     Elements: [
       { Id: "command", Kind: "text", Text: "set volume " },
@@ -160,6 +168,7 @@ from wox_plugin import ChangeQueryParam, QueryElement, QueryHint, QueryType
 
 await self.api.change_query(ctx, ChangeQueryParam(
     query_type=QueryType.INPUT,
+    query_text="set volume 50",
     query_hint=QueryHint(elements=[
         QueryElement(id="command", kind="text", text="set volume "),
         QueryElement(id="volume", kind="argument", value="50",
@@ -184,7 +193,7 @@ plugin `change-query` action supports the same structured payload.
 - Pasting a full command with arguments into ordinary text does not parse slots.
   Paste within an argument updates its value.
 - Without `QueryHint`, existing text queries continue unchanged. If both
-  structure and text are passed to `ChangeQuery`, structure is authoritative.
+  a hint and text are passed to `ChangeQuery`, the text is authoritative and the hint must match it.
 
 Validate a new integration with blank/valid/invalid values, multiple-slot focus,
 whole-query replacement after reopen, undo, and the legacy text path. Set Volume

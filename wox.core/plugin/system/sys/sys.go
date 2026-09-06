@@ -897,7 +897,7 @@ func (r *SysPlugin) buildCommandAction(command SysCommand, contextData common.Co
 				Action: func(ctx context.Context, actionContext plugin.ActionContext) {
 					structure := command.QueryHint.Clone()
 					structure.Elements = append([]common.QueryElement{{Id: "command", Kind: common.QueryElementText, Text: "set volume "}}, structure.Elements...)
-					r.api.ChangeQuery(ctx, common.PlainQuery{QueryType: plugin.QueryTypeInput, QueryHint: structure})
+					r.api.ChangeQuery(ctx, common.PlainQuery{QueryType: plugin.QueryTypeInput, QueryText: structure.PlainText(), QueryHint: structure})
 				},
 			}
 		}

@@ -642,14 +642,14 @@ class ChangeQueryParam:
     Either INPUT (for text-based queries) or SELECTION (for selection-based).
     """
 
-    query_text: str = field(default="")
+    query_text: Optional[str] = None
     """
     The new query text for INPUT type queries.
 
     The text that will appear in the Wox search box.
     """
 
-    query_selection: Selection = field(default_factory=Selection)
+    query_selection: Optional[Selection] = None
     """
     The new selection for SELECTION type queries.
 
@@ -662,6 +662,17 @@ class ChangeQueryParam:
     """
 
     query_hint: Optional[QueryHint] = None
+
+    def __post_init__(self) -> None:
+        """Require real query content independently of optional visual hints."""
+        if self.query_type == QueryType.INPUT:
+            if not isinstance(self.query_text, str):
+                raise ValueError("ChangeQuery input requires complete query_text")
+        elif self.query_type == QueryType.SELECTION:
+            if self.query_selection is None:
+                raise ValueError("ChangeQuery selection requires query_selection")
+        else:
+            raise ValueError("ChangeQuery requires query_type input or selection")
 
     def to_json(self) -> str:
         """
@@ -693,9 +704,6 @@ class ChangeQueryParam:
         """
         data = json.loads(json_str)
 
-        if not data.get("QueryType"):
-            data["QueryType"] = QueryType.INPUT
-
         context_data_raw: Any = data.get("ContextData", {})
         if isinstance(context_data_raw, str):
             try:
@@ -710,8 +718,8 @@ class ChangeQueryParam:
 
         return cls(
             query_type=QueryType(data.get("QueryType")),
-            query_text=data.get("QueryText", ""),
-            query_selection=Selection.from_json(data.get("QuerySelection", Selection().to_json())),
+            query_text=data.get("QueryText"),
+            query_selection=Selection.from_json(data["QuerySelection"]) if data.get("QuerySelection") is not None else None,
             context_data=context_data,
             query_hint=QueryHint.from_value(data.get("QueryHint")),
         )

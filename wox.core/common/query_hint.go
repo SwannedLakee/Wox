@@ -12,12 +12,10 @@ const (
 )
 
 // QueryHint carries semantic values and background guidance for continuous input.
-// It defines the initial text; user edits take priority over retaining the hint.
+// It describes supplied query text; it never supplies or overrides that text.
 // Command templates contain only suffix elements; instances include the command text.
 type QueryHint struct {
 	Elements []QueryElement
-	// PluginId is stamped by core, never trusted as a plugin-supplied routing override.
-	PluginId string `json:",omitempty"`
 }
 
 // QueryElement separates editable values from placeholders and atomic content.
@@ -42,7 +40,7 @@ func (s *QueryHint) Clone() *QueryHint {
 	if s == nil {
 		return nil
 	}
-	return &QueryHint{Elements: append([]QueryElement(nil), s.Elements...), PluginId: s.PluginId}
+	return &QueryHint{Elements: append([]QueryElement(nil), s.Elements...)}
 }
 
 // PlainText provides a lossy compatibility projection, never a serialization format.
@@ -100,4 +98,12 @@ func (s *QueryHint) Validate() error {
 		}
 	}
 	return nil
+}
+
+// NormalizeForQuery discards invalid or stale decoration without blocking the query.
+func (s *QueryHint) NormalizeForQuery(queryType, text string) *QueryHint {
+	if s == nil || queryType != "input" || s.Validate() != nil || s.PlainText() != text {
+		return nil
+	}
+	return s
 }

@@ -86,9 +86,13 @@ keep the user's text and discard unreliable metadata rather than blocking input.
 - Declare suffix elements in `Commands[].QueryHint`; `Aliases` use the same trigger.
   Wox inserts the matched command prefix with reserved ID `command`. Static metadata
   and `RegisterQueryCommands` / `register_query_commands` use the same model.
-- `ChangeQuery.QueryHint` is a complete instance, including the command prefix.
-  Python uses `ChangeQueryParam(query_hint=QueryHint(elements=[...]))` and exports
-  `QueryHint` and `QueryElement` from `wox_plugin`.
+- `ChangeQuery` always requires `QueryType` and complete `QueryText` for input,
+  or complete `QuerySelection` for selection. `QueryHint` is optional visual
+  enhancement, never a replacement for query content. An input hint must describe
+  exactly the supplied text, including trigger keyword, command, separators and values.
+  An invalid or mismatching hint is ignored; the supplied `QueryText` is used unchanged. Explicit `QueryText: ""` remains valid for clearing.
+  Python uses `ChangeQueryParam(query_type=QueryType.INPUT, query_text="set volume 50",
+  query_hint=QueryHint(elements=[...]))`; `QueryHint` and `QueryElement` are SDK exports.
 - Elements have nonempty, unique `Id` values. `text` uses `Text` (including explicit
   separators); `argument` uses `Value`, optional `Placeholder` and `Required`;
   `block` uses atomic `Value`. A highlighted argument remains freely editable.
@@ -103,8 +107,10 @@ keep the user's text and discard unreliable metadata rather than blocking input.
   paste into ordinary text is not parsed into arguments. Reopening selects the entire
   query for replacement; undo and history preserve hints when possible.
 - Keep the list flat; no nested elements, dropdowns, custom rendering or inline markup.
-  Wox owns plugin routing identity. If both text and a hint are passed to `ChangeQuery`,
-  the hint determines the initial text; subsequent user editing takes priority.
+  Hints never carry plugin identity or create a scope. Routing uses the normal query
+  text and explicit `QueryScope`; complete instances must include the trigger keyword
+  when needed (for example `gh issues `). If both text and a hint are passed to `ChangeQuery`,
+  the explicit query text remains authoritative; the hint must match it.
 - Use SDK or single-file SDK APIs; do not assume the limited script `change-query`
   action supports hints. Verify the first supporting Wox/SDK release before setting
   distribution requirements; the single-file runtime version floor alone is insufficient.

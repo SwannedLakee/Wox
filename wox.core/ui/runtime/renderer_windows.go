@@ -51,7 +51,7 @@ func (e *windowsRendererError) Error() string {
 }
 
 func traceNativeCall(format string, args ...any) {
-	if util.IsDev() {
+	if util.IsDev() && windowsRenderTraceEnabled() {
 		util.GetLogger().Debug(context.Background(), fmt.Sprintf("native crash trace: "+format, args...))
 	}
 }

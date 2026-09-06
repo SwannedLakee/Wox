@@ -34,6 +34,7 @@ func toCorePlainQuery(query plainQuery) common.PlainQuery {
 		QueryId:   query.QueryID,
 		QueryType: query.QueryType,
 		QueryText: query.QueryText,
+		QueryHint: query.QueryHint.Clone(),
 		QuerySelection: utilselection.Selection{
 			Type:      utilselection.SelectionType(query.QuerySelection.Type),
 			Text:      query.QuerySelection.Text,

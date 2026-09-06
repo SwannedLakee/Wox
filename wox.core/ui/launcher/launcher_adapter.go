@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"wox/common"
 
 	woxcomponent "wox/ui/launcher/component"
 	launcherview "wox/ui/launcher/view"
@@ -51,6 +52,8 @@ var resultColors = []woxui.Color{
 }
 
 type viewSnapshot struct {
+	structure             *common.QueryHint
+	structureCandidate    bool
 	editing               woxui.TextEditingState
 	results               []queryResult
 	resultsRevision       uint64
@@ -144,6 +147,7 @@ func (a *App) snapshot() viewSnapshot {
 		selectedPreviewType = preview.PreviewType
 	}
 	return viewSnapshot{
+		structure:             a.query.QueryHint.Clone(),
 		editing:               a.editor.State(),
 		results:               a.results,
 		resultsRevision:       a.resultsSectionRevision,
@@ -473,8 +477,17 @@ func (a *App) buildHeader(snapshot viewSnapshot, width, height, queryLineHeight,
 	}
 	queryWidth = max(snapshot.densityMetrics.scaled(140), queryWidth)
 	_, headerPadding := launcherQueryChromeMetrics(queryBoxHeight, snapshot.palette.appPadding, snapshot.show.QueryBoxAtBottom)
+	if snapshot.structure == nil && a.structured.candidate != nil {
+		snapshot.structure = a.structured.candidate.Clone()
+		snapshot.structureCandidate = true
+	}
+	var structured woxwidget.Widget
+	if snapshot.structure != nil {
+		structured = a.structuredQueryView(snapshot, queryWidth, queryEditorHeight, queryLineHeight)
+	}
 	return launcherview.LauncherHeaderView(launcherview.LauncherHeaderProps{
-		Width: width, Height: height, QueryBoxHeight: queryBoxHeight, QueryEditorHeight: queryEditorHeight, DensityScale: snapshot.densityMetrics.scale,
+		StructuredQuery: structured,
+		Width:           width, Height: height, QueryBoxHeight: queryBoxHeight, QueryEditorHeight: queryEditorHeight, DensityScale: snapshot.densityMetrics.scale,
 		QueryWidth: queryWidth, QueryRadius: snapshot.palette.queryRadius, AppPadding: headerPadding, Theme: snapshot.palette.componentTheme(),
 		Query: a.queryViewProps(snapshot, queryWidth, queryEditorHeight, queryLineHeight), Refinement: refinement, RefinementWidth: refinementWidth,
 		Glance: glance, GlanceWidth: glanceWidth, Icon: queryIcon, Icons: queryIcons,
@@ -537,6 +550,7 @@ func (a *App) queryViewProps(snapshot viewSnapshot, width, height, lineHeight fl
 		displayRunes, displayStart, displayEnd, displayFocus, compositionStart, len([]rune(state.Composition)), measure,
 	)
 	selectQueryAt := func(point woxui.Point, line bool) {
+		a.structured.allSelected = false
 		a.hideActionPanel()
 		a.deactivateRequirementForm()
 		offset := a.queryOffsetAt(a.editor.State().Text, point, style, lineHeight)
@@ -560,6 +574,7 @@ func (a *App) queryViewProps(snapshot viewSnapshot, width, height, lineHeight fl
 			focusQuery()
 		},
 		OnSelectionStart: func(point woxui.Point, modifiers woxui.KeyModifiers) {
+			a.structured.allSelected = false
 			a.hideActionPanel()
 			a.deactivateRequirementForm()
 			text := a.editor.State().Text
@@ -589,11 +604,17 @@ func (a *App) queryViewProps(snapshot viewSnapshot, width, height, lineHeight fl
 		OnKey: a.onKey, OnTextInput: func(event woxui.TextInputEvent) bool { a.onTextInput(event); return true }, OnFocusChange: a.onQueryFocusChanged, OnSetValue: a.setQueryText,
 		OnTextInputState: func(state woxui.TextInputState) { _ = a.window.SetTextInputState(state) },
 		OnSelectAll: func() error {
-			a.editor.SelectAll()
+			if !a.onStructuredQueryKey(woxui.KeyEvent{Key: woxui.Key("a"), Modifiers: queryPrimaryModifier(), Down: true}) {
+				a.editor.SelectAll()
+			}
 			_ = a.window.Invalidate()
 			return nil
 		},
 		OnCopy: func() error {
+			a.selectTouchedQueryBlocks()
+			if a.structured.allSelected {
+				return clipboard.WriteText(a.query.QueryText)
+			}
 			if selected := a.editor.SelectedText(); selected != "" {
 				_ = clipboard.WriteText(selected)
 			}
@@ -657,7 +678,7 @@ func (a *App) openQueryContextMenu(windowPos woxui.Point, theme woxcomponent.The
 				if !live.canSelectAll {
 					return
 				}
-				a.editor.SelectAll()
+				a.selectEntireQuery()
 				a.refreshQueryContextMenuIfStale(theme)
 				_ = a.window.Invalidate()
 			}
@@ -689,6 +710,14 @@ func (a *App) refreshQueryContextMenuIfStale(theme woxcomponent.Theme) {
 }
 
 func (a *App) queryViewClipboardCut() error {
+	a.selectTouchedQueryBlocks()
+	if a != nil && a.structured.allSelected {
+		if err := clipboard.WriteText(a.query.QueryText); err != nil {
+			return err
+		}
+		a.replaceWholeStructuredQuery("")
+		return nil
+	}
 	if a == nil || !a.queryCanFocus() {
 		return nil
 	}
@@ -710,11 +739,16 @@ func (a *App) queryViewClipboardCut() error {
 }
 
 func (a *App) queryViewClipboardPaste() error {
+	a.selectTouchedQueryBlocks()
 	if a == nil || !a.queryCanFocus() {
 		return nil
 	}
 	text, err := clipboard.ReadText()
 	if err != nil || text == "" {
+		return nil
+	}
+	if a.structured.allSelected {
+		a.replaceWholeStructuredQuery(normalizeQueryNewlines(text))
 		return nil
 	}
 	previousText := a.editor.State().Text
@@ -744,6 +778,7 @@ func (a *App) setQueryText(value string) error {
 }
 
 func (a *App) placeQueryCaret(point woxui.Point, style woxui.TextStyle, lineHeight float32) {
+	a.structured.allSelected = false
 	a.hideActionPanel()
 	a.deactivateRequirementForm()
 	text := a.editor.State().Text

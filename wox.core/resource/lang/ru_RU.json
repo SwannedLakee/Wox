@@ -1573,6 +1573,7 @@
   "plugin_sys_open_wox_settings": "Открыть настройки Wox",
   "plugin_sys_copy_wox_version": "Копировать версию Wox",
   "plugin_sys_open_system_settings": "Открыть системные настройки",
+  "plugin_sys_set_volume_placeholder": "Громкость (0–100)",
   "plugin_sys_set_volume": "Установить громкость",
   "plugin_sys_set_volume_subtitle": "Введите процент после команды, например 50",
   "plugin_sys_set_volume_invalid": "Введите громкость от 0 до 100",

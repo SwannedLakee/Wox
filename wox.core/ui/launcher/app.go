@@ -38,6 +38,7 @@ const (
 
 // App owns one launcher window and its typed core service boundary.
 type App struct {
+	structured structuredQueryEditor
 	// These narrow locks protect the few resources intentionally accessed outside the UI thread.
 	translationsMu         sync.RWMutex
 	terminalSubscriptionMu sync.Mutex
@@ -533,7 +534,7 @@ func (a *App) showWindow(params showAppParams) error {
 			a.queryHistoryIndex = -1
 		}
 		if params.SelectAll {
-			a.editor.SelectAll()
+			a.selectEntireQuery()
 		}
 		a.actionPanel = false
 		a.actionSelected = 0
@@ -805,10 +806,26 @@ func (a *App) setQuery(query plainQuery) {
 	if query.QueryType == "" {
 		query.QueryType = "input"
 	}
+	a.structured = structuredQueryEditor{}
+	query.QueryHint = query.QueryHint.Clone()
+	if query.QueryHint != nil {
+		if err := query.QueryHint.Validate(); err != nil {
+			query.QueryHint = nil
+		} else if available, ok := a.services.(interface{ QueryHintAvailable(string) bool }); ok && query.QueryHint.PluginId != "" && !available.QueryHintAvailable(query.QueryHint.PluginId) {
+			query.QueryText = query.QueryHint.PlainText()
+			query.QueryHint = nil
+		}
+	}
+	if query.QueryHint != nil {
+		query.QueryText = query.QueryHint.PlainText()
+	}
 	a.query = query
 	a.queryContext = queryContext{}
 	a.queryContextKnown = false
 	a.editor.SetText(query.QueryText, false)
+	if query.QueryHint != nil {
+		a.installStructuredQuery(query.QueryHint)
+	}
 	a.resetQueryTransitionLocked()
 	a.resetQueryLoadingLocked()
 	a.results = nil
@@ -846,8 +863,9 @@ func (a *App) sendCurrentQuery() error {
 	var preserveQuery bool
 	if err := a.runOnUI("prepare current query", func() {
 		query = a.query
+		query.QueryHint = a.query.QueryHint.Clone()
 		startPage = a.show.StartPage
-		skipCompletionHint = !a.generalSettings.Data().EnableQueryCompletionHint
+		skipCompletionHint = a.query.QueryHint != nil || a.structured.candidate != nil || !a.generalSettings.Data().EnableQueryCompletionHint
 		preserveQuery = a.shouldPreserveQueryOnShowLocked()
 		a.startQueryLoadingLocked()
 	}); err != nil {
@@ -1394,6 +1412,9 @@ func (a *App) onKey(event woxui.KeyEvent) bool {
 	if a.onToolbarKey(event) {
 		return true
 	}
+	if a.onStructuredQueryKey(event) {
+		return true
+	}
 	if event.Key == woxui.KeyTab {
 		if event.Modifiers == woxui.KeyModifierShift {
 			a.autoCompleteQueryFromSelectedResult()
@@ -1427,11 +1448,21 @@ func (a *App) onKey(event woxui.KeyEvent) bool {
 	if event.Down && !event.Composing && event.Modifiers.HasPrimary() && (event.Key == woxui.Key("c") || event.Key == woxui.Key("x") || event.Key == woxui.Key("v")) {
 		switch event.Key {
 		case woxui.Key("c"):
+			if a.structured.allSelected {
+				_ = clipboard.WriteText(a.query.QueryText)
+				return true
+			}
 			if selected := a.editor.SelectedText(); selected != "" {
 				_ = clipboard.WriteText(selected)
 			}
 			return true
 		case woxui.Key("x"):
+			if a.structured.allSelected {
+				if clipboard.WriteText(a.query.QueryText) == nil {
+					a.replaceWholeStructuredQuery("")
+				}
+				return true
+			}
 			previousText := a.editor.State().Text
 			selected := a.editor.SelectedText()
 			if selected != "" {
@@ -1450,6 +1481,10 @@ func (a *App) onKey(event woxui.KeyEvent) bool {
 		case woxui.Key("v"):
 			text, err := clipboard.ReadText()
 			if err != nil || text == "" {
+				return true
+			}
+			if a.structured.allSelected {
+				a.replaceWholeStructuredQuery(normalizeQueryNewlines(text))
 				return true
 			}
 			previousText := a.editor.State().Text
@@ -1498,7 +1533,7 @@ func (a *App) onKey(event woxui.KeyEvent) bool {
 			if handled {
 				if query != nil {
 					a.setQuery(*query)
-					a.editor.SelectAll()
+					a.selectEntireQuery()
 					if err := a.sendCurrentQuery(); err != nil {
 						log.Printf("send recalled query history: %v", err)
 					}
@@ -1612,6 +1647,11 @@ func (a *App) onTextInput(event woxui.TextInputEvent) {
 	if event.Kind == woxui.TextInputCommit {
 		event.Text = normalizeQueryNewlines(event.Text)
 	}
+	if a.structured.allSelected && event.Kind == woxui.TextInputCommit {
+		a.replaceWholeStructuredQuery(event.Text)
+		return
+	}
+	a.selectTouchedQueryBlocks()
 	committed := a.editor.HandleTextInput(event)
 	if committed {
 		a.applyQueryTextChangeLocked(a.editor.State().Text)
@@ -1760,6 +1800,7 @@ type pendingResultSelection struct {
 }
 
 type plainQuery struct {
+	QueryHint        *common.QueryHint `json:"QueryHint,omitempty"`
 	QueryID          string            `json:"QueryId"`
 	QueryType        string            `json:"QueryType"`
 	QueryText        string            `json:"QueryText"`

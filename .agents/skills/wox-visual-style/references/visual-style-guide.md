@@ -66,12 +66,25 @@ Preserve the current special contracts unless a task explicitly targets them:
 | Surface | Contract |
 | --- | --- |
 | Launcher query | 50 compact, 55 normal, 61 comfortable; add measured line height for each extra line |
+| Launcher structured argument | One continuous query editor; same font and baseline as command text, no border or layout padding; subtle semantic text-color background over the value, ghost hint for empty arguments |
 | Action Panel header | 18 optically centered line; do not use a 16 Text slot |
 | Action Panel filter | 40 input inside a 46-high slot |
 | Action Panel row | 40 |
 | Action Panel group divider | 16-high slot with a 1px `PreviewSplit` hairline; same treatment as the title divider |
 
 If a shared primitive serves both an ordinary page and a special surface, provide an explicit context-specific composition or semantic size instead of changing one default and relying on call-site overrides.
+
+### Structured query continuity
+
+`QueryHint` is a hinting, background layer, not a form layout. Command text
+and arguments must remain one continuous editing surface. Preserve ordinary
+caret movement, cross-element selection, clipboard operations, deletion, undo and
+IME; Tab navigation is an optional convenience. Use quiet backgrounds and ghost
+hints without separate input borders, font changes, baseline shifts or focus traps.
+Never constrain a user's edit merely to retain a structure annotation. Explicit
+atomic blocks do not make ordinary arguments atomic or justify separate editors.
+This principle applies to future element kinds and plugin integrations as well.
+See [the structured query design](../../../../wox.core/ui/launcher/QUERY_HINT.md#design-principle-continuous-input-comes-first).
 
 ## Control size system
 

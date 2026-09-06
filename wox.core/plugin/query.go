@@ -104,6 +104,7 @@ type Query struct {
 	// ContextData carries hidden query-scoped data. Unlike Refinements, this is
 	// not rendered by the UI and is intended for plugin handoffs such as a shell
 	// working directory.
+	QueryHint   *common.QueryHint `json:",omitempty"`
 	ContextData common.ContextData
 
 	// Scope pins routing to an allowlist of plugins. Empty means default routing.

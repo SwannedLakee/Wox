@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from .query_hint import QueryHint
+
 
 class SelectionType(str, Enum):
     """
@@ -107,6 +109,9 @@ class MetadataCommand:
     command does. Should be concise and informative.
     """
 
+    aliases: list[str] = field(default_factory=list)
+    query_hint: Optional[QueryHint] = None
+
     def to_json(self) -> str:
         """
         Convert to JSON string with camelCase naming.
@@ -118,6 +123,8 @@ class MetadataCommand:
             {
                 "Command": self.command,
                 "Description": self.description,
+                "Aliases": self.aliases,
+                "QueryHint": self.query_hint.to_dict() if self.query_hint else None,
             }
         )
 
@@ -216,7 +223,7 @@ class Selection:
         Returns:
             A new Selection instance
         """
-        data = json.loads(json_str)
+        data = json_str if isinstance(json_str, dict) else json.loads(json_str)
 
         if not data.get("Type"):
             data["Type"] = SelectionType.TEXT
@@ -334,7 +341,7 @@ class QueryEnv:
         Returns:
             A new QueryEnv instance
         """
-        data = json.loads(json_str)
+        data = json_str if isinstance(json_str, dict) else json.loads(json_str)
         return cls(
             active_window_title=data.get("ActiveWindowTitle", ""),
             active_window_pid=data.get("ActiveWindowPid", 0),
@@ -476,6 +483,8 @@ class Query:
     to a plugin-driven ChangeQuery flow, such as a shell working directory.
     """
 
+    query_hint: Optional[QueryHint] = None
+
     def to_json(self) -> str:
         """
         Convert to JSON string with camelCase naming.
@@ -496,6 +505,7 @@ class Query:
                 "Search": self.search,
                 "Refinements": self.refinements,
                 "ContextData": self.context_data,
+                "QueryHint": self.query_hint.to_dict() if self.query_hint else None,
             }
         )
 
@@ -559,6 +569,7 @@ class Query:
             search=data.get("Search", ""),
             refinements=refinements,
             context_data=context_data,
+            query_hint=QueryHint.from_value(data.get("QueryHint")),
         )
 
     def is_global_query(self) -> bool:
@@ -650,6 +661,8 @@ class ChangeQueryParam:
     Hidden query-scoped data to attach to the changed query.
     """
 
+    query_hint: Optional[QueryHint] = None
+
     def to_json(self) -> str:
         """
         Convert to JSON string with camelCase naming.
@@ -661,6 +674,7 @@ class ChangeQueryParam:
             "QueryType": self.query_type,
             "QueryText": self.query_text,
             "ContextData": self.context_data,
+            "QueryHint": self.query_hint.to_dict() if self.query_hint else None,
         }
         if self.query_selection:
             data["QuerySelection"] = json.loads(self.query_selection.to_json())
@@ -699,6 +713,7 @@ class ChangeQueryParam:
             query_text=data.get("QueryText", ""),
             query_selection=Selection.from_json(data.get("QuerySelection", Selection().to_json())),
             context_data=context_data,
+            query_hint=QueryHint.from_value(data.get("QueryHint")),
         )
 
 

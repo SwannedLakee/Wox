@@ -1908,7 +1908,7 @@ func (a *App) exitChatMode() {
 	}
 	a.restoreQueryTextInput()
 	// Returning from chat selects the whole query so a new search starts with a clean slate.
-	a.editor.SelectAll()
+	a.selectEntireQuery()
 	_ = a.applyWindowBounds()
 	a.invalidateChatSurfaces()
 }

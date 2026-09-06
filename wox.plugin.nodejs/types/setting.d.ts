@@ -121,6 +121,9 @@ export interface PluginSettingDefinitionItem {
  * ```
  */
 export interface MetadataCommand {
+  Aliases?: string[]
+  /** Suffix template: Wox inserts the matched command prefix. */
+  QueryHint?: import("./index.js").QueryHint
   /**
    * The command keyword.
    *

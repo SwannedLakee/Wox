@@ -457,3 +457,8 @@ class APIError(WoxPluginError):
     """Raised when an API call fails."""
 
     pass
+
+
+from .models.query_hint import QueryElement, QueryHint
+
+__all__ += ["QueryElement", "QueryHint"]

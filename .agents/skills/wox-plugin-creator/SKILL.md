@@ -1,6 +1,6 @@
 ---
 name: wox-plugin-creator
-description: Create, scaffold, implement, and package Wox plugins (nodejs, python, script-nodejs, script-python, singlefile-python, singlefile-nodejs). Use when cloning official SDK templates, generating script or single-file SDK plugin templates, editing plugin.json metadata, defining SettingDefinitions and validators, wiring i18n, implementing plugin APIs, QueryResponse refinements, refinement hotkeys, or preparing plugin repositories for local packaging. If the user wants to publish a plugin to the official Wox store or check whether it is already listed, prefer wox-plugin-submit2store.
+description: Create, scaffold, implement, and package Wox plugins (nodejs, python, script-nodejs, script-python, singlefile-python, singlefile-nodejs). Use when cloning official SDK templates, generating script or single-file SDK plugin templates, editing plugin.json metadata, defining SettingDefinitions and validators, wiring i18n, implementing plugin APIs, QueryResponse refinements, refinement hotkeys, structured query slots, or preparing plugin repositories for local packaging. If the user wants to publish a plugin to the official Wox store or check whether it is already listed, prefer wox-plugin-submit2store.
 ---
 
 # Wox Plugin Creator
@@ -41,6 +41,7 @@ Single-file Python is the fastest path to a Python SDK plugin. Node.js first ver
 - Prefer standard library features; avoid third-party dependencies unless absolutely necessary. Single-file SDK plugins cannot use pip/npm packages.
 - For SDK usage and API details, read `references/sdk_nodejs.md` or `references/sdk_python.md`.
 - For static HTML previews, use `webview` with a JSON-encoded `html` field in `PreviewData`; see the HTML preview examples in those SDK references. There is no separate `html` preview type, and no local HTTP server is needed.
+- For inline command arguments or atomic query blocks, read [QueryHint](#queryhint). Command declarations contain suffix templates; `ChangeQuery` contains a complete instance. Keep legacy text parsing when structure is absent.
 - For query-scoped filters or sort controls, return `QueryResponse.Refinements` and read `references/refinements.md` before assigning hotkeys.
 - For `plugin.json`, `SettingDefinitions`, `QueryRequirements`, validators, dynamic settings, and feature flags, read `references/plugin_json_schema.md` first.
 - SDK and single-file SDK plugins must persist and read settings through the Public API setting methods (`GetSetting` / `SaveSetting` / `OnSettingChanged`, or Python `get_setting` / `save_setting` / `on_setting_changed`). These values participate in Wox cloud sync and can follow the user across machines. Do not store plugin settings in local files, custom JSON, or other side storage unless the value is truly machine-local and cannot live in settings.
@@ -73,6 +74,56 @@ If a plugin needs to cache anything on disk, put it under the Wox plugin cache f
 - For submitting a plugin to the official Wox store, prefer `wox-plugin-submit2store` skill.
 - Script plugins do not use `plugin.json`; they embed a JSON metadata block in the script header comments.
 - Single-file SDK plugins also embed JSON metadata in the file header. Keep `MinWoxVersion` as `"2.4.2"`. Store delivery uses a `.py` or `.js` download URL with `Runtime` `PYTHON` or `NODEJS`. Do not mix those suffixes with `SCRIPT` or `.wox`.
+
+## QueryHint
+
+`QueryHint` is optional semantic background guidance for `input` queries. It can
+carry actual argument values, but must never turn continuous input into a mandatory
+form. Preserve normal caret movement, cross-element selection, deletion, clipboard,
+undo and IME behavior. Tab is optional. When editing invalidates a semantic boundary,
+keep the user's text and discard unreliable metadata rather than blocking input.
+
+- Declare suffix elements in `Commands[].QueryHint`; `Aliases` use the same trigger.
+  Wox inserts the matched command prefix with reserved ID `command`. Static metadata
+  and `RegisterQueryCommands` / `register_query_commands` use the same model.
+- `ChangeQuery.QueryHint` is a complete instance, including the command prefix.
+  Python uses `ChangeQueryParam(query_hint=QueryHint(elements=[...]))` and exports
+  `QueryHint` and `QueryElement` from `wox_plugin`.
+- Elements have nonempty, unique `Id` values. `text` uses `Text` (including explicit
+  separators); `argument` uses `Value`, optional `Placeholder` and `Required`;
+  `block` uses atomic `Value`. A highlighted argument remains freely editable.
+- Placeholders support `i18n:` and never enter the query value or clipboard.
+  `Required` is descriptive: validate empty values and business constraints before
+  offering or executing actions. Querying itself must not perform the action.
+- Read values by ID from `query.QueryHint.Elements` (Node.js) or
+  `query.query_hint.elements` (Python). Keep legacy `Search` / `search` parsing when
+  the hint is absent; an empty argument is not an absent hint. Wox supplies a lossy
+  plain-text projection in existing query fields; do not reconstruct boundaries from it.
+- Complete commands preview hints; space or Tab activates the template. Whole-command
+  paste into ordinary text is not parsed into arguments. Reopening selects the entire
+  query for replacement; undo and history preserve hints when possible.
+- Keep the list flat; no nested elements, dropdowns, custom rendering or inline markup.
+  Wox owns plugin routing identity. If both text and a hint are passed to `ChangeQuery`,
+  the hint determines the initial text; subsequent user editing takes priority.
+- Use SDK or single-file SDK APIs; do not assume the limited script `change-query`
+  action supports hints. Verify the first supporting Wox/SDK release before setting
+  distribution requirements; the single-file runtime version floor alone is insufficient.
+- Validate blank/valid/invalid arguments, multiple arguments, whole-query replacement
+  after reopen, undo and the legacy path. Set Volume is the first built-in example.
+
+Example command suffix (Wox adds the command text):
+
+```json
+{
+  "Command": "set-volume",
+  "Aliases": ["set volume", "volume"],
+  "QueryHint": {
+    "Elements": [
+      { "Id": "volume", "Kind": "argument", "Placeholder": "Volume (0–100)", "Required": true }
+    ]
+  }
+}
+```
 
 ## Runtime Requirements
 

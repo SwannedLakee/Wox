@@ -1,6 +1,7 @@
 package view
 
 import (
+	"reflect"
 	"testing"
 
 	woxcomponent "wox/ui/launcher/component"
@@ -313,4 +314,43 @@ func launcherQueryEditable(widget woxwidget.Widget) woxwidget.EditableText {
 	stack := widget.(woxwidget.Gesture).Child.(woxwidget.Stack)
 	scroll := stack.Children[0].Child.(woxwidget.ScrollView)
 	return scroll.Child.(woxwidget.EditableText)
+}
+
+func TestQueryTextBaselineSurvivesStructuredFocusTransition(t *testing.T) {
+	for _, scale := range []float32{1, 1.25, 2} {
+		props := LauncherQueryProps{Width: 240 * scale, Height: 42 * scale, LineHeight: 38 * scale, CaretHeight: 34 * scale,
+			Style: woxui.TextStyle{Size: 28 * scale}, State: woxui.TextEditingState{Text: "set volume "},
+			Lines: []LauncherQueryLine{{Text: "set volume "}}, Theme: woxcomponent.Theme{QueryText: woxui.Color{A: 255}}}
+		editable := launcherQueryEditor(props).(woxwidget.EditableText)
+		before := editable.Child.(woxwidget.Gesture).Child.(woxwidget.CaretPainter)
+		after := LauncherQueryLabel(props).(woxwidget.CaretPainter)
+		bounds := woxui.Rect{X: -120 * scale, Y: 18 * scale, Width: props.Width, Height: props.Height}
+		var editing, label, expected woxui.DisplayList
+		before.Paint(&editing, bounds, true, false)
+		after.Paint(&label, bounds, false, false)
+		expected.DrawText("set volume ", woxui.Rect{X: bounds.X, Y: bounds.Y + 2*scale, Width: bounds.Width, Height: props.LineHeight}, props.Style, props.Theme.QueryText)
+		if !reflect.DeepEqual(editing, label) || !reflect.DeepEqual(label, expected) {
+			t.Fatalf("query baseline changed at scale %v", scale)
+		}
+	}
+}
+
+// Decoration must not move text, selection or caret at fractional display scales.
+func TestInlineQueryMarkPreservesTextGeometry(t *testing.T) {
+	for _, scale := range []float32{1, 1.25, 2} {
+		props := LauncherQueryProps{Width: 400 * scale, Height: 42 * scale, LineHeight: 38 * scale, CaretHeight: 34 * scale,
+			Style: woxui.TextStyle{Size: 28 * scale}, State: woxui.TextEditingState{Text: "set volume 30"},
+			Lines: []LauncherQueryLine{{Text: "set volume 30"}}, Theme: woxcomponent.Theme{QueryText: woxui.Color{A: 255}}}
+		bounds := woxui.Rect{X: -120 * scale, Y: 18 * scale, Width: props.Width, Height: props.Height}
+		var expected, actual woxui.DisplayList
+		color := props.Theme.QueryText
+		color.A = 26
+		expected.FillRoundedRect(woxui.Rect{X: bounds.X + 160*scale, Y: bounds.Y + 2*scale, Width: 32 * scale, Height: props.CaretHeight}, 4, color)
+		launcherQueryPainter(props).(woxwidget.CaretPainter).Paint(&expected, bounds, true, false)
+		props.Marks = []LauncherQueryMark{{X: 160 * scale, Width: 32 * scale, Active: true}}
+		launcherQueryPainter(props).(woxwidget.CaretPainter).Paint(&actual, bounds, true, false)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Fatalf("decoration changed editor geometry at scale %v", scale)
+		}
+	}
 }

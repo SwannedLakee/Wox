@@ -1,9 +1,11 @@
 package sys
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
+	"wox/common"
 	"wox/plugin"
 )
 
@@ -80,5 +82,41 @@ func TestSetVolumeCommandAcceptsInlinePercentage(t *testing.T) {
 	completeAction := plugin.buildCommandAction(command, map[string]string{sysCommandVolumeContextKey: "30"})
 	if !incompleteAction.PreventHideAfterAction || incompleteAction.Action == nil || completeAction.PreventHideAfterAction {
 		t.Fatal("incomplete volume commands must continue query input; complete commands must execute normally")
+	}
+}
+
+func TestStructuredVolumeUsesArgumentAndValidatesRange(t *testing.T) {
+	for _, value := range []string{"", "-1", "101", "1.5", "abc", "0", "50", "100", "50%"} {
+		structure := &common.QueryHint{Elements: []common.QueryElement{{Id: "volume", Kind: common.QueryElementArgument, Value: value}}}
+		query := plugin.Query{Search: "set volume 75", QueryHint: structure}
+		got := buildSetVolumeContextData(query)
+		_, valid := parseVolumePercent(value)
+		if valid != (got[sysCommandVolumeContextKey] != "") {
+			t.Fatalf("value %q context = %v", value, got)
+		}
+	}
+}
+
+func TestStructuredVolumeOnlyExecutesValidAction(t *testing.T) {
+	executed := false
+	p := &SysPlugin{commands: []SysCommand{{ID: "set-volume", Title: "Volume", BuildContextData: buildSetVolumeContextData, Action: func(context.Context, plugin.ActionContext) { executed = true }}}}
+	for _, value := range []string{"", "101", "50"} {
+		q := plugin.Query{QueryHint: &common.QueryHint{Elements: []common.QueryElement{{Id: "volume", Kind: "argument", Value: value}}}}
+		response := p.Query(context.Background(), q)
+		if executed {
+			t.Fatal("query executed a volume action")
+		}
+		if len(response.Results) != 1 {
+			t.Fatal("expected volume result only")
+		}
+		if value != "50" && len(response.Results[0].Actions) != 0 {
+			t.Fatal("invalid value exposes an action")
+		}
+		if value == "50" {
+			response.Results[0].Actions[0].Action(context.Background(), plugin.ActionContext{})
+			if !executed {
+				t.Fatal("valid action missing")
+			}
+		}
 	}
 }

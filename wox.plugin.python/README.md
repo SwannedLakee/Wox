@@ -114,3 +114,14 @@ preview = WoxPreview(
 ```
 
 Set either `html` or `url`. Optional JSON fields are `injectCss`, `userAgent`, `cacheDisabled`, and `cacheKey` (defaults to the URL or HTML). Inline HTML has no plugin-relative base URL: embed CSS/images or use absolute resource URLs. This is browser content, not sanitized Markdown; use `html.escape` for untrusted text before interpolation.
+
+## Structured queries
+
+`QueryHint` and `QueryElement` are exported by `wox_plugin`. Declare a suffix
+template in `MetadataCommand.query_hint`, read
+`query.query_hint.elements`, and use `ChangeQueryParam(query_type=QueryType.INPUT,
+query_hint=...)` for a complete instance. When structure is absent, retain
+the existing `query.search` parsing path.
+See the [query model and Python examples](../www/docs/development/plugins/query-model.md#structured-queries).
+This is a development-build capability; verify release and SDK support before
+setting a distributable plugin's minimum versions.

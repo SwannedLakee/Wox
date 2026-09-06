@@ -97,6 +97,7 @@ class PluginAPI(PublicAPI):
         """Change the query in Wox"""
         params = {
             "queryType": query.query_type,
+            "queryHint": json.dumps(query.query_hint.to_dict() if query.query_hint else None),
             "queryText": query.query_text,
             "querySelection": (query.query_selection.__dict__ if query.query_selection else None),
             "queryContextData": json.dumps(query.context_data or {}),

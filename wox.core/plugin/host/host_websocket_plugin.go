@@ -122,6 +122,10 @@ func (w *WebsocketPlugin) QueryWithError(ctx context.Context, query plugin.Query
 		return plugin.QueryResponse{}, fmt.Errorf("failed to marshal plugin query context data: %w", marshalContextDataErr)
 	}
 
+	structureJSON, err := json.Marshal(query.QueryHint)
+	if err != nil {
+		return plugin.QueryResponse{}, err
+	}
 	// Send both Id and QueryId while hosts move to QueryResponse. Older host
 	// code looked for QueryId, while the Go model field is Id.
 	// QueryScope stays core-internal and is not forwarded to external plugin hosts.
@@ -131,6 +135,7 @@ func (w *WebsocketPlugin) QueryWithError(ctx context.Context, query plugin.Query
 		"SessionId":      query.SessionId,
 		"Type":           query.Type,
 		"RawQuery":       query.RawQuery,
+		"QueryHint":      string(structureJSON),
 		"TriggerKeyword": query.TriggerKeyword,
 		"Command":        query.Command,
 		"Search":         query.Search,

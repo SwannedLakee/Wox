@@ -279,3 +279,13 @@ const preview: WoxPreview = {
 ```
 
 Set either `html` or `url`. Optional JSON fields are `injectCss`, `userAgent`, `cacheDisabled`, and `cacheKey` (defaults to the URL or HTML). Inline HTML has no plugin-relative base URL: embed CSS/images or use absolute resource URLs. This is browser content, not sanitized Markdown; escape untrusted text before interpolating it into HTML.
+
+## Structured queries
+
+`QueryHint` adds inline argument slots and atomic blocks to `input` queries.
+Declare a suffix template in `MetadataCommand.QueryHint` (static `Commands`
+or `RegisterQueryCommands`), read `query.QueryHint.Elements` by element ID,
+and pass a complete instance to `ChangeQuery`. Existing text queries stay valid.
+See the [query model and TypeScript examples](../www/docs/development/plugins/query-model.md#structured-queries).
+This is a development-build capability; verify release and SDK support before
+setting a distributable plugin's minimum versions.

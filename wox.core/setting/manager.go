@@ -3,6 +3,7 @@ package setting
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -170,6 +171,7 @@ func (m *Manager) UnpinResult(ctx context.Context, pluginId string, resultTitle 
 }
 
 func (m *Manager) AddQueryHistory(ctx context.Context, query common.PlainQuery) {
+	query.QueryHint = query.QueryHint.Clone()
 	histories := m.woxSetting.QueryHistories.Get()
 	newHistory := QueryHistory{
 		Query:     query,
@@ -196,6 +198,9 @@ func (m *Manager) AddQueryHistory(ctx context.Context, query common.PlainQuery) 
 }
 
 func plainQueryHistoryEqual(left, right common.PlainQuery) bool {
+	if !reflect.DeepEqual(left.QueryHint, right.QueryHint) {
+		return false
+	}
 	if left.QueryType != right.QueryType || left.QueryText != right.QueryText {
 		return false
 	}

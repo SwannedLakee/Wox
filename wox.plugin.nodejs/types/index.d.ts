@@ -270,7 +270,22 @@ export interface QueryEnv {
  * }
  * ```
  */
+/** Semantic values and background input guidance, never a mandatory form.
+ * User edits take priority over retaining hints. Command templates contain suffix elements only.
+ */
+export interface QueryHint {
+  Elements: QueryElement[]
+}
+
+/** Text uses Text; arguments and atomic blocks use Value. IDs are unique per query. */
+export type QueryElement =
+  | { Id: string; Kind: "text"; Text: string }
+  | { Id: string; Kind: "argument"; Value?: string; Placeholder?: string; Required?: boolean }
+  | { Id: string; Kind: "block"; Value: string }
+
 export interface Query {
+  QueryHint?: QueryHint
+
   /**
    * Unique query identifier.
    *
@@ -1257,6 +1272,8 @@ export interface PluginInitParams {
  * ```
  */
 export interface ChangeQueryParam {
+  /** When supplied, structure is authoritative and QueryText is derived by Wox. */
+  QueryHint?: QueryHint
   /**
    * The type of query to change to.
    *

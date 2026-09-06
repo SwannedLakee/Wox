@@ -482,3 +482,10 @@ command defaults, while QueryResponse can choose the layout for each query.
   "Features": [{ "Name": "querySelection" }, { "Name": "debounce", "Params": { "IntervalMs": 200 } }]
 }
 ```
+
+## Structured query arguments and blocks
+
+See [QueryHint](../SKILL.md#queryhint) for `Commands[].Aliases`, suffix
+templates in `Commands[].QueryHint`, complete `ChangeQuery` instances, and
+SDK usage. `QueryHint` remains optional for `input` queries; do not
+embed markup in `QueryText` or infer argument boundaries from pasted text.

@@ -81,6 +81,7 @@ export class PluginAPI implements PublicAPI {
   async ChangeQuery(ctx: Context, query: ChangeQueryParam): Promise<void> {
     await this.invokeMethod(ctx, "ChangeQuery", {
       queryType: query.QueryType,
+      queryHint: JSON.stringify(query.QueryHint ?? null),
       queryText: query.QueryText === undefined ? "" : query.QueryText,
       querySelection: JSON.stringify(query.QuerySelection),
       queryContextData: JSON.stringify(query.ContextData ?? {})

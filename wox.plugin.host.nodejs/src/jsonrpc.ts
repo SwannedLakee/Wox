@@ -1,7 +1,22 @@
 import { logger } from "./logger"
 import path from "path"
 import { PluginAPI } from "./pluginAPI"
-import { ActionContext, Context, FormActionContext, MapString, Plugin, PluginInitParams, Query, QueryEnv, QueryResponse, QueryReturn, Result, ResultAction, Selection, MRUData } from "@wox-launcher/wox-plugin"
+import {
+  ActionContext,
+  Context,
+  FormActionContext,
+  MapString,
+  Plugin,
+  PluginInitParams,
+  Query,
+  QueryEnv,
+  QueryResponse,
+  QueryReturn,
+  Result,
+  ResultAction,
+  Selection,
+  MRUData
+} from "@wox-launcher/wox-plugin"
 import { WebSocket } from "ws"
 import * as crypto from "crypto"
 import { AI } from "@wox-launcher/wox-plugin/types/ai"
@@ -329,6 +344,7 @@ async function query(ctx: Context, request: PluginJsonRpcRequest) {
     SessionId: request.Params.SessionId ?? "",
     Type: request.Params.Type,
     RawQuery: request.Params.RawQuery,
+    QueryHint: parseJsonParam<Query["QueryHint"]>(request.Params.QueryHint, undefined),
     TriggerKeyword: request.Params.TriggerKeyword,
     Command: request.Params.Command,
     Search: request.Params.Search,

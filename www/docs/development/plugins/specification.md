@@ -471,3 +471,11 @@ The grid automatically calculates item sizes based on:
 3. Cell height = cell width + title height (if ShowTitle is enabled)
 
 Adjust `ItemPadding` and `ItemMargin` to control spacing between items. Larger values create more breathing room; smaller values fit more items on screen.
+
+## Structured command templates
+
+`Commands` entries optionally accept `Aliases: string[]` and `QueryHint`.
+The structure declares only suffix elements; Wox inserts the matched command
+prefix. `ChangeQuery` instead receives a complete instance including that prefix.
+See [Structured queries](./query-model.md#structured-queries) for the schema,
+SDK examples, validation responsibilities, and development-version requirements.

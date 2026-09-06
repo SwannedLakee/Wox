@@ -406,6 +406,8 @@ type MetadataFeature struct {
 }
 
 type MetadataCommand struct {
+	Aliases     []string          `json:",omitempty"`
+	QueryHint   *common.QueryHint `json:",omitempty"`
 	Command     string
 	Description common.I18nString // support i18n: prefix
 }

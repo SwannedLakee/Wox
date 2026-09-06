@@ -1746,6 +1746,7 @@
   "plugin_sys_open_wox_settings": "Wox 설정 열기",
   "plugin_sys_copy_wox_version": "Wox 버전 복사",
   "plugin_sys_open_system_settings": "시스템 설정 열기",
+  "plugin_sys_set_volume_placeholder": "음량 (0–100)",
   "plugin_sys_set_volume": "음량 설정",
   "plugin_sys_set_volume_subtitle": "명령어 뒤에 백분율을 입력하세요(예: 50)",
   "plugin_sys_set_volume_invalid": "0부터 100까지의 음량을 입력하세요",

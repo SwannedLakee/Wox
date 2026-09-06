@@ -82,6 +82,12 @@ func fromCoreShowOptions(options contract.ShowOptions) showAppParams {
 
 // ChangeQuery replaces the launcher query and enters the normal typed query pipeline.
 func (a *App) ChangeQuery(_ context.Context, query common.PlainQuery) error {
+	if err := query.QueryHint.Validate(); err != nil {
+		return err
+	}
+	if query.QueryHint != nil {
+		query.QueryText = query.QueryHint.PlainText()
+	}
 	converted := fromCorePlainQuery(query)
 	if err := a.runOnUI("change query", func() {
 		a.setQuery(converted)
@@ -96,6 +102,7 @@ func fromCorePlainQuery(query common.PlainQuery) plainQuery {
 		QueryID:   query.QueryId,
 		QueryType: query.QueryType,
 		QueryText: query.QueryText,
+		QueryHint: query.QueryHint.Clone(),
 		QuerySelection: selection{
 			Type:      string(query.QuerySelection.Type),
 			Text:      query.QuerySelection.Text,

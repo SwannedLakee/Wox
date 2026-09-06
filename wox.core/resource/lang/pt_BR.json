@@ -1572,6 +1572,7 @@
   "plugin_sys_open_wox_settings": "Abrir configurações do Wox",
   "plugin_sys_copy_wox_version": "Copiar versão do Wox",
   "plugin_sys_open_system_settings": "Abrir configurações do sistema",
+  "plugin_sys_set_volume_placeholder": "Volume (0–100)",
   "plugin_sys_set_volume": "Definir volume",
   "plugin_sys_set_volume_subtitle": "Digite uma porcentagem após o comando, por exemplo 50",
   "plugin_sys_set_volume_invalid": "Digite um volume de 0 a 100",

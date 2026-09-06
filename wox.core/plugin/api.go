@@ -264,6 +264,22 @@ type APIImpl struct {
 }
 
 func (a *APIImpl) ChangeQuery(ctx context.Context, query common.PlainQuery) {
+	if query.QueryHint != nil && query.QueryType != QueryTypeInput {
+		util.GetLogger().Error(ctx, "query hint requires input query")
+		return
+	}
+	if err := query.QueryHint.Validate(); err != nil {
+		util.GetLogger().Error(ctx, err.Error())
+		return
+	}
+	if query.QueryHint != nil {
+		query.QueryHint = query.QueryHint.Clone()
+		query.QueryHint.PluginId = a.pluginInstance.Metadata.Id
+		for i := range query.QueryHint.Elements {
+			query.QueryHint.Elements[i].Placeholder = common.I18nString(a.pluginInstance.TranslateMetadataText(ctx, query.QueryHint.Elements[i].Placeholder))
+		}
+		query.QueryText = query.QueryHint.PlainText()
+	}
 	GetPluginManager().GetUI().ChangeQuery(ctx, query)
 }
 

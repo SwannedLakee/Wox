@@ -381,13 +381,25 @@ func (w *WebsocketHost) handleRequestFromPlugin(ctx context.Context, request Jso
 
 		if queryType == plugin.QueryTypeInput {
 			queryText, queryTextExist := request.Params["queryText"]
-			if !queryTextExist {
+			var structure *common.QueryHint
+			if raw := request.Params["queryHint"]; raw != "" && raw != "null" {
+				if err := json.Unmarshal([]byte(raw), &structure); err != nil {
+					w.sendResponseErrToHost(ctx, request, err)
+					return
+				}
+				if err := structure.Validate(); err != nil {
+					w.sendResponseErrToHost(ctx, request, err)
+					return
+				}
+			}
+			if !queryTextExist && structure == nil {
 				util.GetLogger().Error(ctx, fmt.Sprintf("[%s] ChangeQuery method must have a queryText parameter", request.PluginName))
 				return
 			}
 			pluginInstance.API.ChangeQuery(ctx, common.PlainQuery{
 				QueryType:   plugin.QueryTypeInput,
 				QueryText:   queryText,
+				QueryHint:   structure,
 				ContextData: common.UnmarshalContextData(request.Params["queryContextData"]),
 			})
 		}

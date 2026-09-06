@@ -47,6 +47,7 @@ type SysPlugin struct {
 }
 
 type SysCommand struct {
+	QueryHint              *common.QueryHint
 	ID                     string
 	Title                  string
 	SubTitle               string
@@ -107,6 +108,8 @@ func (r *SysPlugin) getMetadataCommands() []plugin.MetadataCommand {
 		}
 		metadataCommands = append(metadataCommands, plugin.MetadataCommand{
 			Command:     command.ID,
+			Aliases:     command.Aliases,
+			QueryHint:   command.QueryHint.Clone(),
 			Description: common.I18nString(command.Title),
 		})
 	}
@@ -224,6 +227,7 @@ func (r *SysPlugin) buildCommands() []SysCommand {
 		},
 		{
 			ID:               "set-volume",
+			QueryHint:        &common.QueryHint{Elements: []common.QueryElement{{Id: "volume", Kind: common.QueryElementArgument, Placeholder: "i18n:plugin_sys_set_volume_placeholder", Required: true}}},
 			Title:            "i18n:plugin_sys_set_volume",
 			SubTitle:         "i18n:plugin_sys_set_volume_subtitle",
 			Icon:             sysVolumeIcon,
@@ -622,6 +626,21 @@ func (r *SysPlugin) fixedVolumeCommand(percent int) SysCommand {
 }
 
 func (r *SysPlugin) Query(ctx context.Context, query plugin.Query) plugin.QueryResponse {
+	if query.QueryHint != nil {
+		command, ok := r.findCommand("set-volume")
+		if !ok || !r.isCommandAvailable(command) {
+			return plugin.QueryResponse{}
+		}
+		result := r.buildCommandResult(ctx, query, command, 1000)
+		value := query.QueryHint.Argument("volume")
+		if _, valid := parseVolumePercent(value); !valid {
+			result.Actions = nil
+			if value != "" {
+				result.SubTitle = "i18n:plugin_sys_set_volume_invalid"
+			}
+		}
+		return plugin.NewQueryResponse([]plugin.QueryResult{result})
+	}
 	if query.Command != "" {
 		if command, ok := r.findCommand(query.Command); ok {
 			return plugin.NewQueryResponse([]plugin.QueryResult{r.buildCommandResult(ctx, query, command, 1000)})
@@ -876,7 +895,9 @@ func (r *SysPlugin) buildCommandAction(command SysCommand, contextData common.Co
 				PreventHideAfterAction: true,
 				ContextData:            contextData,
 				Action: func(ctx context.Context, actionContext plugin.ActionContext) {
-					r.api.ChangeQuery(ctx, common.PlainQuery{QueryType: plugin.QueryTypeInput, QueryText: "set volume "})
+					structure := command.QueryHint.Clone()
+					structure.Elements = append([]common.QueryElement{{Id: "command", Kind: common.QueryElementText, Text: "set volume "}}, structure.Elements...)
+					r.api.ChangeQuery(ctx, common.PlainQuery{QueryType: plugin.QueryTypeInput, QueryHint: structure})
 				},
 			}
 		}
@@ -978,15 +999,23 @@ func (r *SysPlugin) runSystemAction(ctx context.Context, commandID string, actio
 	}
 }
 
+// volumeQueryValue preserves legacy text parsing while keeping structured argument boundaries.
+func volumeQueryValue(query plugin.Query) string {
+	if query.QueryHint != nil {
+		return query.QueryHint.Argument("volume")
+	}
+	return query.Search
+}
+
 func buildSetVolumeContextData(query plugin.Query) common.ContextData {
-	if percent, ok := parseVolumePercent(query.Search); ok {
+	if percent, ok := parseVolumePercent(volumeQueryValue(query)); ok {
 		return common.ContextData{sysCommandVolumeContextKey: strconv.Itoa(percent)}
 	}
 	return common.ContextData{}
 }
 
 func buildSetVolumeTitle(ctx context.Context, query plugin.Query) string {
-	if percent, ok := parseVolumePercent(query.Search); ok {
+	if percent, ok := parseVolumePercent(volumeQueryValue(query)); ok {
 		return fmt.Sprintf(i18n.GetI18nManager().TranslateWox(ctx, "plugin_sys_set_volume_to_percent"), percent)
 	}
 	return "i18n:plugin_sys_set_volume"

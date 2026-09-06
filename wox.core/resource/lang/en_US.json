@@ -1746,6 +1746,7 @@
   "plugin_sys_open_wox_settings": "Open Wox Settings",
   "plugin_sys_copy_wox_version": "Copy Wox Version",
   "plugin_sys_open_system_settings": "Open System Settings",
+  "plugin_sys_set_volume_placeholder": "Volume (0–100)",
   "plugin_sys_set_volume": "Set Volume",
   "plugin_sys_set_volume_subtitle": "Type a percentage after the command, for example 50",
   "plugin_sys_set_volume_invalid": "Enter a volume from 0 to 100",

@@ -17,7 +17,16 @@ const (
 const launcherQueryMinimumEditableWidth = float32(300)
 
 // LauncherQueryProps contains the prepared text and callbacks for the launcher query editor.
+// LauncherQueryMark is a measured semantic range behind ordinary query text.
+type LauncherQueryMark struct {
+	Line     int
+	X, Width float32
+	Active   bool
+}
+
 type LauncherQueryProps struct {
+	Marks            []LauncherQueryMark
+	Label            string
 	Width            float32
 	Height           float32
 	LineHeight       float32
@@ -59,8 +68,13 @@ type LauncherQueryProps struct {
 
 // Equal compares every prepared rendering dependency for the launcher query editor.
 func (p LauncherQueryProps) Equal(other LauncherQueryProps) bool {
-	if p.Width != other.Width || p.Height != other.Height || p.LineHeight != other.LineHeight || p.Style != other.Style || p.State != other.State || p.CompletionSuffix != other.CompletionSuffix || p.CaretWidth != other.CaretWidth || p.CaretLine != other.CaretLine || p.CompositionWidth != other.CompositionWidth || p.CompositionX != other.CompositionX || p.CompositionLine != other.CompositionLine || p.TextWidth != other.TextWidth || p.CaretHeight != other.CaretHeight || p.Focused != other.Focused || p.Enabled != other.Enabled || p.Theme != other.Theme || len(p.Lines) != len(other.Lines) {
+	if p.Label != other.Label || p.Width != other.Width || p.Height != other.Height || p.LineHeight != other.LineHeight || p.Style != other.Style || p.State != other.State || p.CompletionSuffix != other.CompletionSuffix || p.CaretWidth != other.CaretWidth || p.CaretLine != other.CaretLine || p.CompositionWidth != other.CompositionWidth || p.CompositionX != other.CompositionX || p.CompositionLine != other.CompositionLine || p.TextWidth != other.TextWidth || p.CaretHeight != other.CaretHeight || p.Focused != other.Focused || p.Enabled != other.Enabled || p.Theme != other.Theme || len(p.Lines) != len(other.Lines) || len(p.Marks) != len(other.Marks) {
 		return false
+	}
+	for index := range p.Marks {
+		if p.Marks[index] != other.Marks[index] {
+			return false
+		}
 	}
 	for index := range p.Lines {
 		if p.Lines[index] != other.Lines[index] {
@@ -100,6 +114,7 @@ type LauncherHeaderProps struct {
 	QueryRadius       float32
 	AppPadding        woxwidget.Insets
 	Theme             woxcomponent.Theme
+	StructuredQuery   woxwidget.Widget
 	Query             LauncherQueryProps
 	Refinement        woxwidget.Widget
 	RefinementWidth   float32
@@ -143,9 +158,13 @@ func (p launcherQueryLoadingProps) Equal(other launcherQueryLoadingProps) bool {
 func LauncherHeaderView(props LauncherHeaderProps) woxwidget.Widget {
 	queryLeftPadding := scaledLauncherSize(8, props.DensityScale)
 	accessoryGap := scaledLauncherSize(12, props.DensityScale)
+	query := props.StructuredQuery
+	if query == nil {
+		query = LauncherQueryBoundary(props.Query)
+	}
 	children := []woxwidget.Widget{woxwidget.Expanded{Child: woxwidget.Align{
 		Width: props.QueryWidth, Height: props.QueryBoxHeight, Vertical: 0.5,
-		Child: LauncherQueryBoundary(props.Query),
+		Child: query,
 	}}}
 	if props.Refinement != nil {
 		children = append(children, woxwidget.Align{
@@ -291,47 +310,16 @@ func launcherQueryEditor(props LauncherQueryProps) woxwidget.Widget {
 				props.OnSecondaryTapDown(position)
 			}
 		},
-		Child: woxwidget.CaretPainter{Width: props.Width, Height: contentHeight, Active: props.Focused, Paint: func(displayList *woxui.DisplayList, bounds woxui.Rect, focused, caretVisible bool) {
-			textTop := bounds.Y + max(float32(0), bounds.Height-float32(len(lines))*lineHeight)/2
-			lastLine := lines[len(lines)-1]
-			if focused && props.State.Composition == "" && props.CompletionSuffix != "" {
-				hintColor := props.Theme.QueryText
-				hintColor.A = 96
-				displayList.DrawText(props.CompletionSuffix, woxui.Rect{X: bounds.X + lastLine.TextWidth, Y: textTop + float32(len(lines)-1)*lineHeight, Width: max(float32(0), bounds.Width-lastLine.TextWidth), Height: lineHeight}, props.Style, hintColor)
-			}
-			for index, line := range lines {
-				lineY := textTop + float32(index)*lineHeight
-				if focused && props.State.Composition == "" && line.Selected != "" {
-					displayList.FillRoundedRect(woxui.Rect{X: bounds.X + line.PrefixWidth, Y: lineY, Width: line.SelectedWidth, Height: props.CaretHeight}, 3, props.Theme.SelectionBackground)
-				}
-				displayList.DrawText(line.Text, woxui.Rect{X: bounds.X, Y: lineY, Width: bounds.Width, Height: lineHeight}, props.Style, props.Theme.QueryText)
-				if focused && props.State.Composition == "" && line.Selected != "" {
-					displayList.DrawText(line.Selected, woxui.Rect{X: bounds.X + line.PrefixWidth, Y: lineY, Width: line.SelectedWidth, Height: lineHeight}, props.Style, props.Theme.SelectionText)
-				}
-			}
-			if !focused {
-				return
-			}
-
-			cursorX := bounds.X + props.CaretWidth
-			caretY := textTop + float32(props.CaretLine)*lineHeight
-			// Native text fields hide the blinking caret once a range is selected.
-			if caretVisible && props.State.Selection.Collapsed() {
-				displayList.FillRect(woxui.Rect{X: cursorX, Y: caretY, Width: cursorWidth, Height: props.CaretHeight}, props.Theme.Cursor)
-			}
-			if props.OnTextInputState != nil {
-				props.OnTextInputState(woxui.TextInputState{Enabled: true, CursorRect: woxui.Rect{X: cursorX, Y: caretY, Width: cursorWidth, Height: props.CaretHeight}})
-			}
-			if props.State.Composition != "" {
-				compositionY := textTop + float32(props.CompositionLine)*lineHeight
-				displayList.FillRect(woxui.Rect{X: bounds.X + props.CompositionX, Y: compositionY + props.CaretHeight - 1, Width: props.CompositionWidth, Height: 1}, props.Theme.Cursor)
-			}
-		}},
+		Child: launcherQueryPainter(props),
+	}
+	label := props.Label
+	if label == "" {
+		label = "Search Wox"
 	}
 	editor = woxwidget.EditableText{
 		Key:              LauncherQueryInputKey,
 		AutomationID:     "launcher.query.input",
-		Label:            "Search Wox",
+		Label:            label,
 		Value:            props.State.Text,
 		Autofocus:        true,
 		Disabled:         !props.Enabled,
@@ -363,6 +351,62 @@ func launcherQueryEditor(props LauncherQueryProps) woxwidget.Widget {
 		}}
 	}
 	return editor
+}
+
+// LauncherQueryLabel paints unfocused structured elements with the same baseline as editable query text.
+func LauncherQueryLabel(props LauncherQueryProps) woxwidget.Widget {
+	props.Focused = false
+	return launcherQueryPainter(props)
+}
+
+// launcherQueryPainter keeps text, selection and caret geometry identical across focus transitions.
+func launcherQueryPainter(props LauncherQueryProps) woxwidget.Widget {
+	const cursorWidth = float32(2)
+	lineHeight, lines, contentHeight := launcherQueryLineMetrics(props)
+	return woxwidget.CaretPainter{Width: props.Width, Height: contentHeight, Active: props.Focused, Paint: func(displayList *woxui.DisplayList, bounds woxui.Rect, focused, caretVisible bool) {
+		textTop := bounds.Y + max(float32(0), bounds.Height-float32(len(lines))*lineHeight)/2
+		for _, mark := range props.Marks {
+			color := props.Theme.QueryText
+			color.A = 16
+			if mark.Active {
+				color.A = 26
+			}
+			displayList.FillRoundedRect(woxui.Rect{X: bounds.X + mark.X, Y: textTop + float32(mark.Line)*lineHeight, Width: mark.Width, Height: props.CaretHeight}, 4, color)
+		}
+		lastLine := lines[len(lines)-1]
+		if focused && props.State.Composition == "" && props.CompletionSuffix != "" {
+			hintColor := props.Theme.QueryText
+			hintColor.A = 96
+			displayList.DrawText(props.CompletionSuffix, woxui.Rect{X: bounds.X + lastLine.TextWidth, Y: textTop + float32(len(lines)-1)*lineHeight, Width: max(float32(0), bounds.Width-lastLine.TextWidth), Height: lineHeight}, props.Style, hintColor)
+		}
+		for index, line := range lines {
+			lineY := textTop + float32(index)*lineHeight
+			if focused && props.State.Composition == "" && line.Selected != "" {
+				displayList.FillRoundedRect(woxui.Rect{X: bounds.X + line.PrefixWidth, Y: lineY, Width: line.SelectedWidth, Height: props.CaretHeight}, 3, props.Theme.SelectionBackground)
+			}
+			displayList.DrawText(line.Text, woxui.Rect{X: bounds.X, Y: lineY, Width: bounds.Width, Height: lineHeight}, props.Style, props.Theme.QueryText)
+			if focused && props.State.Composition == "" && line.Selected != "" {
+				displayList.DrawText(line.Selected, woxui.Rect{X: bounds.X + line.PrefixWidth, Y: lineY, Width: line.SelectedWidth, Height: lineHeight}, props.Style, props.Theme.SelectionText)
+			}
+		}
+		if !focused {
+			return
+		}
+
+		cursorX := bounds.X + props.CaretWidth
+		caretY := textTop + float32(props.CaretLine)*lineHeight
+		// Native text fields hide the blinking caret once a range is selected.
+		if caretVisible && props.State.Selection.Collapsed() {
+			displayList.FillRect(woxui.Rect{X: cursorX, Y: caretY, Width: cursorWidth, Height: props.CaretHeight}, props.Theme.Cursor)
+		}
+		if props.OnTextInputState != nil {
+			props.OnTextInputState(woxui.TextInputState{Enabled: true, CursorRect: woxui.Rect{X: cursorX, Y: caretY, Width: cursorWidth, Height: props.CaretHeight}})
+		}
+		if props.State.Composition != "" {
+			compositionY := textTop + float32(props.CompositionLine)*lineHeight
+			displayList.FillRect(woxui.Rect{X: bounds.X + props.CompositionX, Y: compositionY + props.CaretHeight - 1, Width: props.CompositionWidth, Height: 1}, props.Theme.Cursor)
+		}
+	}}
 }
 
 // launcherQueryScrollSurface clips overflowing query lines and reserves the trailing window-drag region.

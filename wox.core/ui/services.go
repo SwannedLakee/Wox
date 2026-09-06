@@ -129,7 +129,11 @@ func (s *CoreServices) LauncherShowOptions(ctx context.Context, sessionID string
 
 // AutomationShowOptions resolves the normal launcher settings and screen position for smoke tests.
 func (s *CoreServices) AutomationShowOptions(ctx context.Context, sessionID string) contract.ShowOptions {
-	return s.LauncherShowOptions(ctx, sessionID)
+	options := s.LauncherShowOptions(ctx, sessionID)
+	// Match the main hotkey's selection contract instead of the onboarding defaults.
+	options.SelectAll = true
+	options.ShowSource = string(common.ShowSourceDefault)
+	return options
 }
 
 // Shown records that the launcher window became visible.
@@ -270,4 +274,15 @@ func uiServiceContext(ctx context.Context, sessionID string) context.Context {
 		ctx = util.NewTraceContext()
 	}
 	return util.WithSessionContext(ctx, sessionID)
+}
+
+// ResolveQueryHint matches a declaration without invoking a plugin query.
+func (s *CoreServices) ResolveQueryHint(ctx context.Context, text string) *common.QueryHint {
+	return plugin.GetPluginManager().ResolveQueryHint(ctx, text)
+}
+
+// QueryHintAvailable lets history restore fall back to text after plugin removal or disabling.
+func (s *CoreServices) QueryHintAvailable(pluginID string) bool {
+	instance := plugin.GetPluginManager().GetPluginInstanceById(pluginID)
+	return instance != nil && instance.Setting != nil && !instance.Setting.Disabled.Get()
 }

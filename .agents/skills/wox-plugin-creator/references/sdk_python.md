@@ -242,3 +242,10 @@ preview = WoxPreview(
 ```
 
 Set either `html` or `url`. Optional JSON fields are `injectCss`, `userAgent`, `cacheDisabled`, and `cacheKey` (defaults to the URL or HTML). Inline HTML has no plugin-relative base URL: embed CSS/images or use absolute resource URLs. This is browser content, not sanitized Markdown; use `html.escape` for untrusted text before interpolation.
+
+## Structured query arguments and blocks
+
+See [QueryHint](../SKILL.md#queryhint) for `Commands[].Aliases`, suffix
+templates in `Commands[].QueryHint`, complete `ChangeQuery` instances, and
+SDK usage. `QueryHint` remains optional for `input` queries; do not
+embed markup in `QueryText` or infer argument boundaries from pasted text.

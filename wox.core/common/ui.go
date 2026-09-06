@@ -17,7 +17,8 @@ const (
 
 type PlainQuery struct {
 	QueryId        string
-	QueryType      string // see plugin.QueryType
+	QueryType      string     // see plugin.QueryType
+	QueryHint      *QueryHint `json:",omitempty"`
 	QueryText      string
 	QuerySelection selection.Selection
 	// QueryScope pins routing to an allowlist of plugins. Empty means default
@@ -56,7 +57,7 @@ type SettingWindowContext struct {
 }
 
 func (c PlainQuery) IsEmpty() bool {
-	return c.QueryText == "" && c.QuerySelection.String() == "" && c.QueryScope.IsEmpty()
+	return c.QueryHint == nil && c.QueryText == "" && c.QuerySelection.String() == "" && c.QueryScope.IsEmpty()
 }
 
 func (c PlainQuery) String() string {

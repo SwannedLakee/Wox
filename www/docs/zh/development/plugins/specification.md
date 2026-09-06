@@ -469,3 +469,10 @@ results = [
 3. 单元格高度 = 单元格宽度 + 标题高度（如果启用 ShowTitle）
 
 调整 `ItemPadding` 和 `ItemMargin` 可控制项目间距。较大的值会增加留白空间，较小的值可在屏幕上容纳更多项目。
+
+## 结构化命令模板
+
+`Commands` 中的命令可以声明可选的 `Aliases: string[]` 和 `QueryHint`。
+声明只包含命令后面的元素，Wox 自动补上实际匹配的命令前缀；`ChangeQuery`
+则接收包含前缀的完整实例。字段、SDK 示例、校验职责和版本要求见
+[结构化查询](./query-model.md#结构化查询)。

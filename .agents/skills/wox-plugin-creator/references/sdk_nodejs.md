@@ -105,7 +105,7 @@ The `ctx` object is required for all API calls.
 
 ### General
 
-- `ChangeQuery(ctx, query: PlainQuery)`: Update the search bar text.
+- `ChangeQuery(ctx, query: ChangeQueryParam)`: Update the search bar text or provide a complete `QueryHint`.
 - `HideApp(ctx)`: Hide the Wox window.
 - `ShowApp(ctx)`: Show the Wox window.
 - `Notify(ctx, message)`: Display a system notification.
@@ -249,3 +249,10 @@ const preview: WoxPreview = {
 ```
 
 Set either `html` or `url`. Optional JSON fields are `injectCss`, `userAgent`, `cacheDisabled`, and `cacheKey` (defaults to the URL or HTML). Inline HTML has no plugin-relative base URL: embed CSS/images or use absolute resource URLs. This is browser content, not sanitized Markdown; escape untrusted text before interpolating it into HTML.
+
+## Structured query arguments and blocks
+
+See [QueryHint](../SKILL.md#queryhint) for `Commands[].Aliases`, suffix
+templates in `Commands[].QueryHint`, complete `ChangeQuery` instances, and
+SDK usage. `QueryHint` remains optional for `input` queries; do not
+embed markup in `QueryText` or infer argument boundaries from pasted text.

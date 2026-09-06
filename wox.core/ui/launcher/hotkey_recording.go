@@ -52,7 +52,7 @@ func (a *App) startHotkeyRecording(idPrefix string, target *formFieldsState, ind
 	for _, kind := range allowedKinds {
 		allowed[kind] = true
 	}
-	if rec := a.hotkeySettings.Recording(); rec != nil && rec.target == target && rec.fieldIndex == index {
+	if rec := a.hotkeySettings.Recording(); rec != nil && rec.target == target && rec.fieldIndex == index && !rec.statusError {
 		return
 	}
 	if target == nil || index < 0 || index >= len(target.definitions) || (target.definitions[index].Type != "hotkey" && target.definitions[index].Type != "dictationHotkey") || !a.hotkeyRecordingTargetCurrentLocked(target) {
@@ -80,7 +80,7 @@ func (a *App) startHotkeyRecording(idPrefix string, target *formFieldsState, ind
 		_ = a.runOnUI("apply hotkey recording capability", func() {
 			if a.hotkeySettings.Recording() == state {
 				if err != nil {
-					state.status = err.Error()
+					state.status = a.translate(err.Error())
 					state.statusError = true
 				} else {
 					state.raw = capability.RawRecorderAvailable

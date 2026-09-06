@@ -14,6 +14,7 @@
   "ui_hotkey_hold_press_hint": "Press modifier keys to set hotkey, left/right keys are distinguished",
   "ui_hotkey_modifier_press_hint": "Press a shortcut, double-press a modifier, or press modifier keys",
   "ui_hotkey_dictation_press_hint": "Press a shortcut, double-press or press modifier keys, or hold modifier keys",
+  "ui_hotkey_accessibility_required": "Accessibility permission required",
   "ui_hotkey_raw_recorder_unavailable": "This hotkey type cannot be recorded in the current environment",
   "ui_hotkey_side_left": "Left",
   "ui_hotkey_side_right": "Right",

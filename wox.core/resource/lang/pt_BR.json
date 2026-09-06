@@ -13,6 +13,7 @@
   "ui_hotkey_hold_prefix": "Segurar",
   "ui_hotkey_modifier_press_hint": "Pressione um atalho, pressione duas vezes um modificador ou pressione modificadores uma vez",
   "ui_hotkey_dictation_press_hint": "Pressione um atalho, pressione modificadores uma ou duas vezes, ou mantenha modificadores pressionados",
+  "ui_hotkey_accessibility_required": "Permissão de Acessibilidade necessária",
   "ui_hotkey_raw_recorder_unavailable": "Este tipo de atalho não pode ser gravado no ambiente atual",
   "ui_hotkey_conflict_main": "Este atalho já é usado pelo atalho principal do Wox.",
   "ui_hotkey_conflict_selection": "Este atalho já é usado pelo atalho de seleção.",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"wox/ai"
@@ -12,6 +13,8 @@ import (
 	appplugin "wox/plugin/system/app"
 	"wox/setting"
 	"wox/ui/contract"
+	"wox/util"
+	"wox/util/keyboard"
 )
 
 // HotkeyAppCandidates returns platform application identities suitable for exclusion rules.
@@ -45,6 +48,23 @@ func (s *CoreServices) StartHotkeyRecording(ctx context.Context, sessionID strin
 	}
 	ctx = uiServiceContext(ctx, sessionID)
 	logger.Info(ctx, fmt.Sprintf("received hotkey recording state from UI: isRecording=true purpose=%s allowedKinds=%v", purpose, allowedKinds))
+	if runtime.GOOS == "darwin" {
+		// Pending raw subscriptions are valid for global hotkeys, but cannot record
+		// input yet. Probe again on each attempt so granting access allows a retry.
+		status, err := s.MacOSPermissionStatus(ctx, sessionID)
+		if err != nil {
+			return contract.HotkeyRecordingCapability{}, err
+		}
+		granted := status.Accessibility == "granted"
+		if err := keyboard.ReconcileRawKeyListenerAccessWithPermissionStatus(granted); err != nil {
+			return contract.HotkeyRecordingCapability{}, err
+		}
+		if !granted {
+			_, _ = GetUIManager().PostOnHotkeyRecording(ctx, false, "", nil)
+			util.GetLogger().Warn(ctx, "hotkey recording blocked: Accessibility permission is required")
+			return contract.HotkeyRecordingCapability{}, errors.New("i18n:ui_hotkey_accessibility_required")
+		}
+	}
 	capability, err := GetUIManager().PostOnHotkeyRecording(ctx, true, purpose, allowedKinds)
 	if err != nil {
 		return contract.HotkeyRecordingCapability{}, err

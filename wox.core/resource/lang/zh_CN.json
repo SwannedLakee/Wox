@@ -14,6 +14,7 @@
   "ui_hotkey_hold_press_hint": "按修饰键设置快捷键，支持左右键区分",
   "ui_hotkey_modifier_press_hint": "按快捷键、双击修饰键，或按一次修饰键",
   "ui_hotkey_dictation_press_hint": "按快捷键、双击/按一次修饰键，或按住修饰键",
+  "ui_hotkey_accessibility_required": "请先授予辅助功能权限",
   "ui_hotkey_raw_recorder_unavailable": "当前环境无法录入这种快捷键",
   "ui_hotkey_side_left": "左",
   "ui_hotkey_side_right": "右",
